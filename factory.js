@@ -91,6 +91,9 @@ ${content}
 }
 
 // === ЗАПУСК ФАБРИКИ ===
-await createPost("Как мой батлер делает SEO в 2025 году");
-// await createPost("Топ 5 инструментов для автоматизации контента");
-// await createPost("Почему AI меняет маркетинг");
+const fs = require('fs');
+const topics = fs.readFileSync('topics.txt', 'utf-8').split('\n').filter(t => t.trim());
+
+for (const topic of topics) {
+  await createPost(topic.trim());
+}
