@@ -91,7 +91,6 @@ ${content}
 }
 
 // === ЗАПУСК ФАБРИКИ ===
-const fs = require('fs');
 const topics = fs.readFileSync('topics.txt', 'utf-8').split('\n').filter(t => t.trim());
 
 for (const topic of topics) {
