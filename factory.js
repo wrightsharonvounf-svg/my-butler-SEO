@@ -91,8 +91,27 @@ ${content}
 }
 
 // === ЗАПУСК ФАБРИКИ ===
-const topics = fs.readFileSync('topics.txt', 'utf-8').split('\n').filter(t => t.trim());
+// === ЗАПУСК ФАБРИКИ: одна статья в день ===
+const topicsPath = 'topics.txt';
+const topics = fs.readFileSync(topicsPath, 'utf-8')
+  .split('\n')
+  .map(t => t.trim())
+  .filter(t => t);
 
-for (const topic of topics) {
-  await createPost(topic.trim());
+if (topics.length === 0) {
+  console.log("📭 Нет тем для генерации — выход");
+  process.exit(0);
 }
+
+const nextTopic = topics[0];
+console.log(`📝 Генерируем: "${nextTopic}"`);
+
+// Генерим статью
+await createPost(nextTopic);
+
+// Удаляем первую тему из списка
+const remainingTopics = topics.slice(1).join('\n');
+fs.writeFileSync(topicsPath, remainingTopics);
+
+console.log(`✅ Статья "${nextTopic}" опубликована`);
+console.log(`📋 Осталось тем: ${remainingTopics.trim() ? remainingTopics.split('\n').length : 0}`);
