@@ -1,0 +1,74 @@
+name: 🤖 Ежедневная генерация статьи
+
+# Запуск: 
+# - По расписанию (каждый день в 9:00 UTC = 12:00 МСК)
+# - Вручную (workflow_dispatch)
+# - При push в main, кроме коммитов от батлера
+on:
+  schedule:
+    - cron: '0 9 * * *'   # ежедневно в 09:00 UTC
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    # Исключаем запуск, если коммит от батлера — чтобы избежать бесконечного цикла
+    paths-ignore: [ 'README.md' ]  # опционально: игнорировать мусор
+    # ❌ Не запускать, если коммит от батлера
+    exclude:
+      - author_email: 'butler@zaebis.store'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+
+    steps:
+      - name: 🔍 Checkout
+        uses: actions/checkout@v4
+        with:
+          # Нужен токен, чтобы можно было пушить
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          # Устанавливаем глубину 0, чтобы можно было пушить
+          fetch-depth: 0
+
+      - name: 📦 Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-cache-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-cache-
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: 📦 Install dependencies
+        run: npm install
+
+      - name: 🧠 Generate article with AI
+        run: node factory.js
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+      - name: 🛠️ Build site
+        run: npm run build
+
+      - name: 📤 Commit and push
+        run: |
+          # Настройка Git
+          git config user.name "My Butler Factory"
+          git config user.email "butler@zaebis.store"
+          
+          # Добавляем все изменения
+          git add .
+          
+          # Проверяем, есть ли изменения для коммита
+          if ! git diff --staged --quiet; then
+            git commit -m "🤖 Авто: новая статья от AI"
+            git push
+          else
+            echo "ℹ️ Нет изменений — пуш не требуется"
+          fi
