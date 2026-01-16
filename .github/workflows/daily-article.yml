@@ -12,7 +12,7 @@ on:
     branches: [ main ]
     # Исключаем запуск, если коммит от батлера
     exclude:
-      - author_email: 'butler@zaebis.store'
+      - author_email: 'Timur_Suhov'
 
 jobs:
   generate:
