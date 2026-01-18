@@ -89,55 +89,52 @@ ${content}
   fs.writeFileSync(path.join(POSTS_DIR, filename), frontmatter);
   console.log(`✅ Статья создана: ${filename}`);
 }
-// === ЗАПУСК ФАБРИКИ: умная очередь ===
+// === ЗАПУСК ФАБРИКИ: одна статья в день из очереди ===
 
 const TOPICS_FILE = 'topics.txt';
 const QUEUE_FILE = 'topics-queue.txt';
 
-// Читаем текущую очередь публикаций
-let topics = fs.readFileSync(TOPICS_FILE, 'utf-8')
+// Читаем текущую тему
+let currentTopics = fs.readFileSync(TOPICS_FILE, 'utf-8')
   .split('\n')
   .map(t => t.trim())
   .filter(t => t);
 
-// Если нет тем для публикации — переносим одну из очереди
-if (topics.length === 0) {
-  console.log("📭 topics.txt пуст — берём тему из очереди");
+// Если текущая тема есть → генерим её и удаляем
+if (currentTopics.length > 0) {
+  const topic = currentTopics[0];
+  console.log(`📝 Генерируем: "${topic}"`);
+  await createPost(topic);
 
-  const queue = fs.readFileSync(QUEUE_FILE, 'utf-8')
-    .split('\n')
-    .map(t => t.trim())
-    .filter(t => t);
-
-  if (queue.length === 0) {
-    console.log("🚫 Нет тем ни в topics.txt, ни в очереди — выход");
-    process.exit(0);
-  }
-
-  const nextTopic = queue[0];
-  console.log(`📥 Переносим в публикацию: "${nextTopic}"`);
-
-  // Пишем в topics.txt
-  fs.writeFileSync(TOPICS_FILE, nextTopic);
-
-  // Удаляем из очереди
-  const newQueue = queue.slice(1).join('\n');
-  fs.writeFileSync(QUEUE_FILE, newQueue);
-
-  // Обновляем topics
-  topics = [nextTopic];
+  // Удаляем из topics.txt
+  const remaining = currentTopics.slice(1);
+  fs.writeFileSync(TOPICS_FILE, remaining.join('\n'));
+  console.log(`✅ Статья "${topic}" опубликована`);
+  process.exit(0); // Важно: выходим, чтобы не брать из очереди
 }
 
-// Берём первую тему
-const currentTopic = topics[0];
-console.log(`📝 Генерируем статью: "${currentTopic}"`);
+// Если текущей темы нет — берём одну из очереди
+const queue = fs.readFileSync(QUEUE_FILE, 'utf-8')
+  .split('\n')
+  .map(t => t.trim())
+  .filter(t => t);
 
-// Генерируем статью
-await createPost(currentTopic);
+if (queue.length === 0) {
+  console.log("📭 Нет тем в очереди — выход");
+  process.exit(0);
+}
 
-// Удаляем из topics.txt
-const remaining = topics.slice(1);
-fs.writeFileSync(TOPICS_FILE, remaining.join('\n'));
+const nextTopic = queue[0];
+console.log(`📥 Переносим в публикацию: "${nextTopic}"`);
 
-console.log(`✅ Статья "${currentTopic}" опубликована`);
-console.log(`📋 Осталось в текущей очереди: ${remaining.length}`);
+// Записываем в topics.txt
+fs.writeFileSync(TOPICS_FILE, nextTopic);
+
+// Удаляем из очереди
+const newQueue = queue.slice(1).join('\n');
+fs.writeFileSync(QUEUE_FILE, newQueue);
+
+// Генерим статью
+await createPost(nextTopic);
+console.log(`✅ Статья "${nextTopic}" опубликована`);
+
