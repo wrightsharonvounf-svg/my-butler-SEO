@@ -3,7 +3,7 @@ import { defineConfig } from 'astro/config';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://wrightsharonvounf-svg.github.io/my-butler-SEO/',
+  site: 'https://butler-tim.ru',
   // Убираем интеграцию sitemap, так как у нас есть свой postbuild.js
   // integrations: [sitemap()], 
   
