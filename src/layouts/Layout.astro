@@ -25,7 +25,8 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 
 		<title>{title}</title>
 		<meta name="description" content={description} />
-        <link rel="canonical" href={canonicalURL} />
+		<meta name="robots" content="index, follow">
+	 <link rel="canonical" href={canonicalURL} />
 
         <meta property="og:type" content="website" />
         <meta property="og:url" content={Astro.url} />
