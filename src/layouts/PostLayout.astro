@@ -5,25 +5,14 @@ const { content } = Astro.props;
 ---
 
 <Layout title={content.title} description={content.description}>
-  <!-- Вся шапка только здесь -->
   <article class="prose max-w-4xl mx-auto p-6">
-    <header class="mb-8">
-      <h1 class="text-3xl font-bold">{content.title}</h1>
-      <p class="text-gray-600 mt-2">
-        Опубликовано: {new Date(content.pubDate).toLocaleDateString('ru-RU')}
-        {content.author && ` • Автор: ${content.author}`}
-      </p>
-    </header>
+    <header>...</header>
 
-    <!-- Хлебные крошки, изображение, контент -->
-    {content.heroImage && (
-      <img src={content.heroImage} alt={content.title} style="..." />
-    )}
+    <!-- Правильно: просто <Content /> -->
+    <div class="content">
+      <Content />
+    </div>
 
-    <main class="content">
-      <slot />
-    </main>
-
-    <footer>© {new Date().getFullYear()} My Butler Factory</footer>
+    <footer>...</footer>
   </article>
 </Layout>
