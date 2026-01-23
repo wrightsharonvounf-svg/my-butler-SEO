@@ -62,21 +62,5 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 	</head>
 	<body>
         <noscript><div><img src="https://mc.yandex.ru/watch/103370647" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
-
-		<header style="padding: 1rem; border-bottom: 1px solid #ccc; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;">
-			<a href="/" style="text-decoration: none; font-weight: bold; font-size: 1.2rem;">Наш Блог</a>
-            <nav>
-                <a href="/blog" style="margin-left: 1rem;">Блог</a>
-                <a href="/uslugi" style="margin-left: 1rem;">Услуги</a>
-                <a href="/o-nas" style="margin-left: 1rem;">О нас</a>
-                <a href="/kontakty" style="margin-left: 1rem;">Контакты</a>
-            </nav>
-		</header>
-		<main style="padding: 0 1rem;">
-			<slot />
-		</main>
-		<footer style="padding: 1rem; border-top: 1px solid #ccc; margin-top: 2rem; text-align: center;">
-			<p>Вся информация носит ознакомительный характер.</p>
-		</footer>
 	</body>
 </html>
