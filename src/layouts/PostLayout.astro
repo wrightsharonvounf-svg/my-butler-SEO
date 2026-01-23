@@ -1,18 +1,28 @@
 ---
 // src/layouts/PostLayout.astro
 import Layout from '../layouts/Layout.astro';
-const { content } = Astro.props;
+
+// ✅ Важно: деструктурируем и Content!
+const { content, Content } = Astro.props;
 ---
 
 <Layout title={content.title} description={content.description}>
   <article class="prose max-w-4xl mx-auto p-6">
-    <header>...</header>
+    <header class="mb-8">
+      <h1 class="text-3xl font-bold">{content.title}</h1>
+      <p class="text-gray-600 mt-2">
+        Опубликовано: {new Date(content.pubDate).toLocaleDateString('ru-RU')}
+        {content.author && ` • Автор: ${content.author}`}
+      </p>
+    </header>
 
-    <!-- Правильно: просто <Content /> -->
+    <!-- ✅ Правильно: вызываем <Content /> -->
     <div class="content">
       <Content />
     </div>
 
-    <footer>...</footer>
+    <footer class="mt-12 pt-6 border-t text-gray-500 text-sm">
+      © {new Date().getFullYear()} My Butler Factory
+    </footer>
   </article>
 </Layout>
