@@ -1,57 +1,57 @@
 // update-old-post.js
 import fs from 'fs';
 import path from 'path';
-import { glob } from 'glob';
+import glob from 'glob';
 
-const POSTS_DIR = './src/content/posts';
+// Папка с markdown-статьями
+const POSTS_DIR = path.join('src', 'content', 'blog');
 
-// Найти все .md-файлы
-const files = glob.sync(`${POSTS_DIR}/**/*.md`);
+// Шаблон для генерации нового абзаца
+const generateFreshParagraph = (title) => {
+  const date = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' });
+  return `\n\n*Обновлено ${date}: свежие советы и рекомендации по теме "${title}".*`;
+};
 
-if (files.length === 0) {
-  console.log("📭 Нет статей для обновления");
-  process.exit(0);
-}
+// Получаем все markdown-файлы
+glob(`${POSTS_DIR}/**/*.md`, (err, files) => {
+  if (err) throw err;
 
-// Выбрать случайную статью
-const randomFile = files[Math.floor(Math.random() * files.length)];
-console.log(`📝 Обновляем: ${randomFile}`);
+  files.forEach(file => {
+    let content = fs.readFileSync(file, 'utf-8');
 
-// Прочитать файл
-let content = fs.readFileSync(randomFile, 'utf-8');
+    // Разделяем frontmatter и тело статьи
+    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
+    if (!frontmatterMatch) {
+      console.warn(`⚠️ Frontmatter не найден в файле: ${file}`);
+      return;
+    }
 
-// Извлечь frontmatter (всё между ---)
-const frontmatterMatch = content.match(/^(---\s[\s\S]+?---)/m);
-if (!frontmatterMatch) {
-  console.error("❌ Нет frontmatter");
-  process.exit(1);
-}
+    const frontmatter = frontmatterMatch[0];
+    let body = content.slice(frontmatter.length);
 
-let frontmatter = frontmatterMatch[0];
-const body = content.slice(frontmatterMatch[0].length);
+    // Получаем title из frontmatter
+    const titleMatch = frontmatter.match(/title:\s*["']?(.+?)["']?\s*$/m);
+    const title = titleMatch ? titleMatch[1] : 'Статья';
 
-// Обновить lastUpdated
-const now = new Date().toISOString().split('T')[0];
-const lastUpdatedLine = `lastUpdated: "${now}"`;
+    // Генерируем свежий абзац
+    const freshParagraph = generateFreshParagraph(title);
 
-// Если есть lastUpdated — замени
-if (frontmatter.includes('lastUpdated')) {
-  frontmatter = frontmatter.replace(
-    /(lastUpdated: )".*?"/,
-    `$1"${now}"`
-  );
-} else {
-  // Если нет — добавь после pubDate
-  frontmatter = frontmatter.replace(
-    /(pubDate: ".*?")/,
-    `$1\n${lastUpdatedLine}`
-  );
-}
+    // Добавляем только если его ещё нет
+    if (!body.includes(freshParagraph.trim())) {
+      body += freshParagraph;
+    }
 
-// Добавить пометку в начало тела
-const updateNote = `> 🔁 **Обновлено: ${new Date().toLocaleDateString('ru-RU')}**\n\n`;
-const newBody = updateNote + body;
+    // Обновляем дату публикации в frontmatter (если есть pubDate)
+    const pubDateMatch = frontmatter.match(/pubDate:\s*["']?(.+?)["']?\s*$/m);
+    let updatedFrontmatter = frontmatter;
+    if (pubDateMatch) {
+      const newPubDate = new Date().toISOString();
+      updatedFrontmatter = frontmatter.replace(pubDateMatch[0], `pubDate: "${newPubDate}"`);
+    }
 
-// Сохранить
-fs.writeFileSync(randomFile, frontmatter + newBody);
-console.log(`✅ Статья обновлена: ${randomFile}`);
+    // Сохраняем обратно
+    fs.writeFileSync(file, updatedFrontmatter + body, 'utf-8');
+    console.log(`✅ Обновлена статья: ${file}`);
+  });
+});
+
