@@ -1,13 +1,11 @@
 // Файл: astro.config.mjs (Правильная версия)
 import { defineConfig } from 'astro/config';
+import sitemap from '@astrojs/sitemap';
 
 // https://astro.build/config
 export default defineConfig({
   site: 'https://www.butler-tim.ru',
-  // Убираем интеграцию sitemap, так как у нас есть свой postbuild.js
-  // integrations: [sitemap()], 
-  
-  // Производительность сервера
+  integrations: [sitemap()],
   output: 'static',
   
   vite: {
