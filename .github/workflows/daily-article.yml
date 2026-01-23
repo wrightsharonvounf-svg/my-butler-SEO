@@ -15,7 +15,8 @@ on:
       - author_email: 'butler@zaebis.store'
 
 jobs:
-  generate:
+    update:
+    needs: generate
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -25,18 +26,8 @@ jobs:
       - name: 🔍 Checkout
         uses: actions/checkout@v4
         with:
-          # Нужен токен, чтобы можно было пушить
           token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          # Устанавливаем глубину 0, чтобы можно было пушить
           fetch-depth: 0
-
-      - name: 📦 Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-cache-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-cache-
 
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
@@ -46,27 +37,13 @@ jobs:
       - name: 📦 Install dependencies
         run: npm install
 
-      - name: 🧠 Generate article with AI
-        run: node factory.js
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-
-      - name: 🛠️ Build site
-        run: npm run build
+      - name: 🔄 Update old post
+        run: node update-old-post.js
 
       - name: 📤 Commit and push
         run: |
-          # Настройка Git
           git config user.name "My Butler Factory"
           git config user.email "butler@zaebis.store"
-          
-          # Добавляем все изменения
           git add .
-          
-          # Проверяем, есть ли изменения для коммита
-          if ! git diff --staged --quiet; then
-            git commit -m "🤖 Авто: новая статья от AI"
-            git push
-          else
-            echo "ℹ️ Нет изменений — пуш не требуется"
-          fi
+          git commit -m "🔁 Авто: обновлена старая статья" || exit 0
+          git push
