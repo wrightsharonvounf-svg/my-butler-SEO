@@ -2,47 +2,61 @@
 import fs from 'fs';
 import path from 'path';
 import glob from 'glob';
+import OpenAI from 'openai';
 
-// Папка с markdown-статьями
+// Инициализация API (ключ из GitHub Secrets)
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
 const POSTS_DIR = path.join('src', 'content', 'blog');
 
-// Шаблон для генерации нового абзаца
-const generateFreshParagraph = (title) => {
-  const date = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' });
-  return `\n\n*Обновлено ${date}: свежие советы и рекомендации по теме "${title}".*`;
-};
+// Генерация уникального абзаца через GPT
+async function generateFreshParagraph(title) {
+  const prompt = `Напиши один уникальный абзац в Markdown на тему "${title}".
+Абзац должен быть информативным, интересным, подходить для блога о недвижимости.
+Не добавляй HTML, только текст.`;
 
-// Получаем все markdown-файлы
-glob(`${POSTS_DIR}/**/*.md`, (err, files) => {
-  if (err) throw err;
+  const response = await client.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 150
+  });
 
-  files.forEach(file => {
+  return `\n\n${response.choices[0].message.content.trim()}`;
+}
+
+// Основная функция
+async function updatePosts() {
+  const files = glob.sync(`${POSTS_DIR}/**/*.md`);
+
+  for (const file of files) {
     let content = fs.readFileSync(file, 'utf-8');
 
-    // Разделяем frontmatter и тело статьи
+    // Разделяем frontmatter и тело
     const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
     if (!frontmatterMatch) {
       console.warn(`⚠️ Frontmatter не найден в файле: ${file}`);
-      return;
+      continue;
     }
 
     const frontmatter = frontmatterMatch[0];
     let body = content.slice(frontmatter.length);
 
-    // Получаем title из frontmatter
-    const titleMatch = frontmatter.match(/title:\s*["']?(.+?)["']?\s*$/m);
+    // Берем title для генерации
+    const titleMatch = frontmatter.match(/title:\s*["']?(.+?)["']?/m);
     const title = titleMatch ? titleMatch[1] : 'Статья';
 
-    // Генерируем свежий абзац
-    const freshParagraph = generateFreshParagraph(title);
+    // Генерация уникального абзаца
+    const freshParagraph = await generateFreshParagraph(title);
 
-    // Добавляем только если его ещё нет
+    // Добавляем абзац, если его ещё нет
     if (!body.includes(freshParagraph.trim())) {
       body += freshParagraph;
     }
 
-    // Обновляем дату публикации в frontmatter (если есть pubDate)
-    const pubDateMatch = frontmatter.match(/pubDate:\s*["']?(.+?)["']?\s*$/m);
+    // Обновляем pubDate
+    const pubDateMatch = frontmatter.match(/pubDate:\s*["']?(.+?)["']?/m);
     let updatedFrontmatter = frontmatter;
     if (pubDateMatch) {
       const newPubDate = new Date().toISOString();
@@ -52,6 +66,10 @@ glob(`${POSTS_DIR}/**/*.md`, (err, files) => {
     // Сохраняем обратно
     fs.writeFileSync(file, updatedFrontmatter + body, 'utf-8');
     console.log(`✅ Обновлена статья: ${file}`);
-  });
-});
+  }
+}
 
+// Запуск
+updatePosts()
+  .then(() => console.log('Все статьи обновлены!'))
+  .catch(err => console.error(err));
