@@ -4,7 +4,7 @@ import sitemap from '@astrojs/sitemap';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://butler-tim.ru',
+  site: 'https://www.butler-tim.ru',
   integrations: [sitemap()],
   output: 'static',
   
