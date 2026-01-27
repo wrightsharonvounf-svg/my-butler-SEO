@@ -100,16 +100,20 @@ async function createPost(topic) {
   const content = await generateArticle(topic);
 
   const frontmatter = `---
-title: "${topic}"
-pubDate: "${pubDate}"
-category: "${category}"
-description: "${topic}"
-tags: ["недвижимость", "финансы", "${category}"]
-layout: ../../layouts/PostLayout.astro
+title: "${title}"
+pubDate: ${pubDate}
+author: "Butler SEO Bot"
+description: "${title}"
+tags:
+  - недвижимость
+  - финансы
+  - аренда
+  - ипотека
 ---
 
 ${content}
 `;
+
 
   fs.writeFileSync(path.join(catDir, filename), frontmatter);
   console.log(`✅ Опубликовано: ${category}/${filename}`);
