@@ -1,41 +1,32 @@
-// factory.js — инфо-генератор под недвижимость + финансы
-
+// factory.js — генератор инфо-статей под Astro + SEO
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
-import fetch from 'node-fetch';
 
 dotenv.config();
 
 const POSTS_DIR = './src/content/posts';
+const TOPICS_FILE = 'topics.txt';
+const QUEUE_FILE = 'topics-queue.txt';
 
-const ALLOWED_CATEGORIES = {
-  arenda: ['аренда', 'сдача', 'квартира', 'арендатор'],
-  ipoteka: ['ипотека', 'кредит', 'банк', 'ставка'],
-  investicii: ['инвестиции', 'доходность', 'окупаемость', 'капитал'],
-  nalogi: ['налог', 'вычет', 'ндфл', 'продажа']
-};
-
-// Проверка категории по ключевым словам
-function detectCategory(topic) {
-  const lower = topic.toLowerCase();
-  for (const [cat, keys] of Object.entries(ALLOWED_CATEGORIES)) {
-    if (keys.some(k => lower.includes(k))) return cat;
-  }
-  return null;
+// Проверка API ключа
+if (!process.env.DEEPSEEK_API_KEY) {
+  console.error('❌ Нет DEEPSEEK_API_KEY в .env');
+  process.exit(1);
 }
 
-// Создание папки категории
-function ensureDir(dir) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+// Создаём папку, если нет
+if (!fs.existsSync(POSTS_DIR)) {
+  fs.mkdirSync(POSTS_DIR, { recursive: true });
 }
 
 // Транслитерация
 function transliterate(title) {
   const ru = {
-    а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'yo',ж:'zh',з:'z',и:'i',й:'y',
-    к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',
-    х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'shch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'
+    а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'yo',ж:'zh',
+    з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',
+    п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',
+    ч:'ch',ш:'sh',щ:'shch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'
   };
   return title.toLowerCase()
     .split('')
@@ -46,58 +37,77 @@ function transliterate(title) {
     .replace(/^-+|-+$/g, '');
 }
 
-// Генерация статьи
+// Определение категории
+function detectCategory(title) {
+  const t = title.toLowerCase();
+  if (t.includes('налог')) return 'nalogi';
+  if (t.includes('ипотек')) return 'ipoteka';
+  if (t.includes('аренд')) return 'arenda';
+  if (t.includes('инвест')) return 'investicii';
+  return 'info';
+}
+
+// Генерация статьи через DeepSeek
 async function generateArticle(topic) {
   const prompt = `
-Напиши информационную SEO-статью на русском языке на тему: "${topic}".
-Это должен быть ИНФОРМАЦИОННЫЙ материал, без рекламы и услуг.
-
-Объём: 1200–1500 слов.
+Напиши SEO-статью на русском языке на тему: "${topic}".
+Объём: 1000–1300 слов.
 Структура:
 1. Заголовок H1
 2. Введение
-3. 4–5 подзаголовков H2
+3. 3–5 подзаголовков H2 с раскрытием
 4. Заключение
 
-Стиль: экспертный, нейтральный, полезный.
-Не упоминай компании, услуги и коммерцию.
+Тон: экспертный, понятный.
+Без HTML и Markdown. Только текст.
 `;
 
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      max_tokens: 1400,
-    }),
-  });
+  try {
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 1500
+      })
+    });
 
-  const data = await response.json();
-  return data.choices[0].message.content.trim();
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'DeepSeek error');
+
+    return data.choices[0].message.content.trim();
+  } catch (err) {
+    console.error('❌ Ошибка генерации:', err.message);
+    return `Статья временно недоступна. Тема: ${topic}`;
+  }
 }
 
 // Создание статьи
 async function createPost(topic) {
-  const category = detectCategory(topic);
+  const title = topic.trim();
+  const slug = transliterate(title);
+  const pubDate = new Date().toISOString().split('T')[0];
+  const category = detectCategory(title);
+  const categoryDir = path.join(POSTS_DIR, category);
 
-  if (!category) {
-    console.log(`⛔ Пропущена тема (не инфо): ${topic}`);
+  if (!fs.existsSync(categoryDir)) {
+    fs.mkdirSync(categoryDir, { recursive: true });
+  }
+
+  const filename = `${slug}-${pubDate}.md`;
+  const filepath = path.join(categoryDir, filename);
+
+  if (fs.existsSync(filepath)) {
+    console.log(`⚠️ Уже существует: ${filename}`);
     return;
   }
 
-  const catDir = path.join(POSTS_DIR, category);
-  ensureDir(catDir);
-
-  const slug = transliterate(topic);
-  const pubDate = new Date().toISOString().split('T')[0];
-  const filename = `${slug}-${pubDate}.md`;
-
-  const content = await generateArticle(topic);
+  const content = await generateArticle(title);
 
   const frontmatter = `---
 title: "${title}"
@@ -107,35 +117,53 @@ description: "${title}"
 tags:
   - недвижимость
   - финансы
-  - аренда
-  - ипотека
+  - ${category}
 ---
 
 ${content}
 `;
 
-
-  fs.writeFileSync(path.join(catDir, filename), frontmatter);
-  console.log(`✅ Опубликовано: ${category}/${filename}`);
+  fs.writeFileSync(filepath, frontmatter, 'utf-8');
+  console.log(`✅ Создано: ${category}/${filename}`);
 }
 
-// === ЗАПУСК ===
+// === ЛОГИКА ОЧЕРЕДИ ===
 
-const TOPICS_FILE = 'topics.txt';
-
-const topics = fs.readFileSync(TOPICS_FILE, 'utf-8')
-  .split('\n')
-  .map(t => t.trim())
-  .filter(Boolean);
-
-if (!topics.length) {
-  console.log("📭 Нет тем для публикации");
-  process.exit(0);
+function readList(file) {
+  if (!fs.existsSync(file)) return [];
+  return fs.readFileSync(file, 'utf-8')
+    .split('\n')
+    .map(t => t.trim())
+    .filter(Boolean);
 }
 
-const topic = topics[0];
-await createPost(topic);
+function writeList(file, list) {
+  fs.writeFileSync(file, list.join('\n'), 'utf-8');
+}
 
-// Удаляем опубликованную тему
-fs.writeFileSync(TOPICS_FILE, topics.slice(1).join('\n'));
+// Запуск
+(async function runFactory() {
+  let topics = readList(TOPICS_FILE);
 
+  if (topics.length > 0) {
+    const topic = topics.shift();
+    console.log(`📝 Генерируем: ${topic}`);
+    await createPost(topic);
+    writeList(TOPICS_FILE, topics);
+    process.exit(0);
+  }
+
+  let queue = readList(QUEUE_FILE);
+
+  if (queue.length === 0) {
+    console.log('📭 Очередь пуста');
+    process.exit(0);
+  }
+
+  const next = queue.shift();
+  writeList(TOPICS_FILE, [next]);
+  writeList(QUEUE_FILE, queue);
+
+  console.log(`📥 Переносим в публикацию: ${next}`);
+  await createPost(next);
+})();
