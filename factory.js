@@ -111,7 +111,7 @@ async function createPost(topic) {
 
   const frontmatter = `---
 title: "${title}"
-pubDate: ${pubDate}
+pubDate: "${pubDate}"
 author: "Butler SEO Bot"
 description: "${title}"
 tags:
