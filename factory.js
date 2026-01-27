@@ -3,6 +3,8 @@
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import fetch from 'node-fetch';
+
 dotenv.config();
 
 const POSTS_DIR = './src/content/posts';
