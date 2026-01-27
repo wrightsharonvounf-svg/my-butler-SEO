@@ -31,7 +31,7 @@ function transliterate(title) {
 async function generateArticle(topic) {
   const prompt = `
 Напиши SEO-статью на русском языке на тему: "${topic}".
-Объём: 500–700 слов.
+Объём: 1000–1200 слов.
 Структура:
 1. Заголовок H1
 2. Введение
