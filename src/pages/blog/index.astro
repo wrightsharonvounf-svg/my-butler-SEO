@@ -33,7 +33,7 @@ const categories = posts.reduce((acc, post) => {
         <ul>
           {items.map(post => (
             <li>
-              <a href={`/blog/${category}/${post.slug}/`}>
+              <a href={`/blog/${category}/${slug}/`}>
                 {post.data.title}
               </a>
             </li>
