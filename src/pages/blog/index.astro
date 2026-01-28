@@ -15,15 +15,15 @@ const categories = posts.reduce((acc, post) => {
 
 <Layout
   title="Блог о недвижимости и финансах"
-  description="Информационный блог о недвижимости, аренде, ипотеке, налогах и инвестициях. Актуальные статьи и разборы."
+  description="Информационный блог об аренде, ипотеке, налогах и инвестициях в недвижимость."
 >
   <section style="max-width: 900px; margin: 0 auto; padding: 2rem 1rem;">
 
     <h1>Блог о недвижимости и финансах</h1>
 
     <p>
-      В этом блоге мы публикуем полезные статьи об аренде недвижимости,
-      ипотеке, налогах, инвестициях и управлении жильём.
+      Полезные статьи об аренде квартир, ипотеке, налогах,
+      доходности недвижимости и ошибках собственников.
     </p>
 
     {Object.entries(categories).map(([category, items]) => (
@@ -31,17 +31,21 @@ const categories = posts.reduce((acc, post) => {
         <h2>{category}</h2>
 
         <ul>
-          {items.map(post => (
-            <li>
-              <a href={`/blog/${category}/${slug}/`}>
-                {post.data.title}
-              </a>
-            </li>
-          ))}
+          {items.map(post => {
+            const [, slugWithExt] = post.id.split('/');
+            const slug = slugWithExt.replace('.md', '');
+
+            return (
+              <li>
+                <a href={`/blog/${category}/${slug}/`}>
+                  {post.data.title}
+                </a>
+              </li>
+            );
+          })}
         </ul>
       </section>
     ))}
 
   </section>
 </Layout>
-
