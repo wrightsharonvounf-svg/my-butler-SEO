@@ -1,27 +1,47 @@
 ---
-// Файл: src/pages/blog/index.astro (Версия «Чистый Список»)
 import Layout from '../../layouts/Layout.astro';
-import { getCollection } from "astro:content";
+import { getCollection } from 'astro:content';
 
-// Получаем ВСЕ статьи из папки /posts/ и сортируем их по дате публикации (новые вверху)
-const allPosts = (await getCollection("posts")).sort(
-	(a, b) => new Date(b.data.pubDate).valueOf() - new Date(a.data.pubDate).valueOf()
-);
+const posts = await getCollection('posts');
+
+// группируем по категориям
+const categories = posts.reduce((acc, post) => {
+  const [category] = post.id.split('/');
+  acc[category] = acc[category] || [];
+  acc[category].push(post);
+  return acc;
+}, {});
 ---
 
-<Layout title="Блог об управлении недвижимостью" description="Все о посуточной аренде в Санкт-Петербурге.">
-  <div style="padding: 1rem 0;">
-    <h1>Статьи и гайды</h1>
-    
-    <ul style="list-style-type: none; padding: 0; margin-top: 2rem;">
-      {allPosts.map((post) => (
-        <li style="margin-bottom: 1rem;">
-          <!-- Выводим заголовок как ссылку -->
-          <h2 style="margin: 0; font-size: 1.5rem; font-weight: normal;">
-            <a href={`/blog/${post.slug}/`} style="text-decoration: none; color: #333;">{post.data.title}</a>
-          </h2>
-        </li>
-      ))}
-    </ul>
-  </div>
+<Layout
+  title="Блог о недвижимости и финансах"
+  description="Информационный блог о недвижимости, аренде, ипотеке, налогах и инвестициях. Актуальные статьи и разборы."
+>
+  <section style="max-width: 900px; margin: 0 auto; padding: 2rem 1rem;">
+
+    <h1>Блог о недвижимости и финансах</h1>
+
+    <p>
+      В этом блоге мы публикуем полезные статьи об аренде недвижимости,
+      ипотеке, налогах, инвестициях и управлении жильём.
+    </p>
+
+    {Object.entries(categories).map(([category, items]) => (
+      <section style="margin-top: 2rem;">
+        <h2>{category}</h2>
+
+        <ul>
+          {items.map(post => (
+            <li>
+              <a href={`/blog/${category}/${post.slug}/`}>
+                {post.data.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+
+  </section>
 </Layout>
+
