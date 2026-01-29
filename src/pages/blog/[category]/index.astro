@@ -1,0 +1,46 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts');
+  const categories = [...new Set(posts.map(p => p.id.split('/')[0]))];
+
+  return categories.map(category => ({
+    params: { category }
+  }));
+}
+
+const { category } = Astro.params;
+const posts = (await getCollection('posts'))
+  .filter(p => p.id.startsWith(`${category}/`));
+---
+
+<Layout
+  title={`Статьи по теме: ${category}`}
+  description={`Полезные статьи по теме ${category}: аренда, ипотека, налоги и недвижимость.`}
+>
+  <section style="max-width: 900px; margin: 0 auto; padding: 2rem 1rem;">
+    <h1>Категория: {category}</h1>
+
+    <p>
+      Подборка статей по теме <strong>{category}</strong>.
+      Актуальные материалы, разборы и практические советы.
+    </p>
+
+    <ul>
+      {posts.map(post => {
+        const [, slugWithExt] = post.id.split('/');
+        const slug = slugWithExt.replace('.md', '');
+        return (
+          <li>
+            <a href={`/blog/${category}/${slug}/`}>
+              {post.data.title}
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+</Layout>
+
