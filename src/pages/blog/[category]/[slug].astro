@@ -5,19 +5,26 @@ import { getCollection } from 'astro:content';
 export async function getStaticPaths() {
   const posts = await getCollection('posts');
 
-  return posts.map(post => {
-    const [category, slugWithExt] = post.id.split('/');
-    const slug = slugWithExt.replace('.md', '');
-
-    return {
-      params: { category, slug },
-      props: post
-    };
-  });
+  return posts
+    .filter(post => post.data.category) // ← фильтр
+    .map(post => ({
+      params: {
+        category: post.data.category,
+        slug: post.slug,
+      },
+      props: post,
+    }));
 }
+
 
 const post = Astro.props;
 const { Content } = await post.render();
+---
+
+<PostLayout content={post.data}>
+  <Content />
+</PostLayout>
+
 
 const { category, slug } = Astro.params;
 
