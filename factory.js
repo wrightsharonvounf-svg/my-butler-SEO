@@ -1,4 +1,3 @@
-// factory.js — генератор инфо-статей под Astro + SEO
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -9,18 +8,15 @@ const POSTS_DIR = './src/content/posts';
 const TOPICS_FILE = 'topics.txt';
 const QUEUE_FILE = 'topics-queue.txt';
 
-// Проверка API ключа
 if (!process.env.DEEPSEEK_API_KEY) {
   console.error('❌ Нет DEEPSEEK_API_KEY в .env');
   process.exit(1);
 }
 
-// Создаём папку, если нет
 if (!fs.existsSync(POSTS_DIR)) {
   fs.mkdirSync(POSTS_DIR, { recursive: true });
 }
 
-// Транслитерация
 function transliterate(title) {
   const ru = {
     а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'yo',ж:'zh',
@@ -37,17 +33,6 @@ function transliterate(title) {
     .replace(/^-+|-+$/g, '');
 }
 
-// Определение категории
-function detectCategory(title) {
-  const t = title.toLowerCase();
-  if (t.includes('налог')) return 'nalogi';
-  if (t.includes('ипотек')) return 'ipoteka';
-  if (t.includes('аренд')) return 'arenda';
-  if (t.includes('инвест')) return 'investicii';
-  return 'info';
-}
-
-// Генерация статьи через DeepSeek
 async function generateArticle(topic) {
   const prompt = `
 Напиши SEO-статью на русском языке на тему: "${topic}".
@@ -64,7 +49,6 @@ async function generateArticle(topic) {
 3–4 подзаголовка H2
 Заключение
 `;
-
 
   try {
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -91,20 +75,13 @@ async function generateArticle(topic) {
   }
 }
 
-// Создание статьи
 async function createPost(topic) {
   const title = topic.trim();
   const slug = transliterate(title);
   const pubDate = new Date().toISOString().split('T')[0];
-  const category = detectCategory(title);
-  const categoryDir = path.join(POSTS_DIR, category);
-
-  if (!fs.existsSync(categoryDir)) {
-    fs.mkdirSync(categoryDir, { recursive: true });
-  }
 
   const filename = `${slug}-${pubDate}.md`;
-  const filepath = path.join(categoryDir, filename);
+  const filepath = path.join(POSTS_DIR, filename);
 
   if (fs.existsSync(filepath)) {
     console.log(`⚠️ Уже существует: ${filename}`);
@@ -118,20 +95,14 @@ title: "${title}"
 pubDate: "${pubDate}"
 author: "Butler SEO Bot"
 description: "${title}"
-tags:
-  - недвижимость
-  - финансы
-  - ${category}
 ---
 
 ${content}
 `;
 
   fs.writeFileSync(filepath, frontmatter, 'utf-8');
-  console.log(`✅ Создано: ${category}/${filename}`);
+  console.log(`✅ Создано: ${filename}`);
 }
-
-// === ЛОГИКА ОЧЕРЕДИ ===
 
 function readList(file) {
   if (!fs.existsSync(file)) return [];
@@ -145,7 +116,6 @@ function writeList(file, list) {
   fs.writeFileSync(file, list.join('\n'), 'utf-8');
 }
 
-// Запуск
 (async function runFactory() {
   let topics = readList(TOPICS_FILE);
 
