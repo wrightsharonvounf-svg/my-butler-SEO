@@ -6,7 +6,7 @@ export async function getStaticPaths() {
   const posts = await getCollection('posts');
 
   return posts
-    .filter(post => post.data.category) // ← фильтр
+    .filter(post => post.data.category)
     .map(post => ({
       params: {
         category: post.data.category,
@@ -16,22 +16,15 @@ export async function getStaticPaths() {
     }));
 }
 
-
 const post = Astro.props;
 const { Content } = await post.render();
----
-
-<PostLayout content={post.data}>
-  <Content />
-</PostLayout>
-
 
 const { category, slug } = Astro.params;
 
 // Получаем статьи той же категории
 const allPosts = await getCollection('posts');
 const relatedPosts = allPosts
-  .filter(p => p.id.startsWith(`${category}/`) && !p.id.includes(slug))
+  .filter(p => p.data.category === category && p.slug !== slug)
   .slice(0, 4);
 ---
 
@@ -50,77 +43,19 @@ const relatedPosts = allPosts
     <Content />
   </article>
 
-  <!-- Автоперелинковка -->
   {relatedPosts.length > 0 && (
     <section style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #eee;">
       <h3>Другие статьи по теме</h3>
       <ul>
-        {relatedPosts.map(p => {
-          const [, relatedSlugWithExt] = p.id.split('/');
-          const relatedSlug = relatedSlugWithExt.replace('.md', '');
-          return (
-            <li>
-              <a href={`/blog/${category}/${relatedSlug}/`}>
-                {p.data.title}
-              </a>
-            </li>
-          );
-        })}
+        {relatedPosts.map(p => (
+          <li>
+            <a href={`/blog/${category}/${p.slug}/`}>
+              {p.data.title}
+            </a>
+          </li>
+        ))}
       </ul>
     </section>
   )}
-	<section style="margin-top: 3rem;">
-  <h3>Часто задаваемые вопросы</h3>
-
-  <div>
-    <strong>Нужно ли регистрировать договор аренды?</strong>
-    <p>Если договор заключается на срок более 1 года, регистрация обязательна.</p>
-  </div>
-
-  <div>
-    <strong>Как платить налог с аренды?</strong>
-    <p>Можно выбрать НДФЛ, самозанятость или ИП — зависит от формата сдачи.</p>
-  </div>
-
-  <div>
-    <strong>Что выгоднее — посуточная или долгосрочная аренда?</strong>
-    <p>Посуточная аренда может быть доходнее, но требует большего управления.</p>
-  </div>
-</section>
-
-  <!-- Schema.org Breadcrumb -->
-  <script type="application/ld+json">
-{JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": [
-    {
-      "@type": "Question",
-      "name": "Нужно ли регистрировать договор аренды?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Если договор заключается на срок более одного года, он подлежит обязательной регистрации."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Как платить налог с аренды квартиры?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Собственник может выбрать НДФЛ, режим самозанятости или зарегистрироваться как ИП."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Что выгоднее — посуточная или долгосрочная аренда?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Посуточная аренда потенциально приносит больший доход, но требует активного управления."
-      }
-    }
-  ]
-})}
-</script>
-
 
 </PostLayout>
