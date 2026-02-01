@@ -4,48 +4,27 @@ import { getCollection } from 'astro:content';
 
 const posts = await getCollection('posts');
 
-// группируем по категориям
-const categories = posts.reduce((acc, post) => {
-  const [category] = post.id.split('/');
-  acc[category] = acc[category] || [];
-  acc[category].push(post);
-  return acc;
-}, {});
+// сортировка по дате
+posts.sort((a, b) => 
+  new Date(b.data.pubDate) - new Date(a.data.pubDate)
+);
 ---
 
 <Layout
   title="Блог о недвижимости и финансах"
-  description="Информационный блог об аренде, ипотеке, налогах и инвестициях в недвижимость."
+  description="Информационный блог об аренде, ипотеке, налогах и инвестициях."
 >
   <section style="max-width: 900px; margin: 0 auto; padding: 2rem 1rem;">
+    <h1>Блог о недвижимости</h1>
 
-    <h1>Блог о недвижимости и финансах</h1>
-
-    <p>
-      Полезные статьи об аренде квартир, ипотеке, налогах,
-      доходности недвижимости и ошибках собственников.
-    </p>
-
-    {Object.entries(categories).map(([category, items]) => (
-      <section style="margin-top: 2rem;">
-        <h2>{category}</h2>
-
-        <ul>
-          {items.map(post => {
-            const [, slugWithExt] = post.id.split('/');
-            const slug = slugWithExt.replace('.md', '');
-
-            return (
-              <li>
-                <a href={`/blog/${category}/${slug}/`}>
-                  {post.data.title}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-    ))}
-
+    <ul>
+      {posts.map(post => (
+        <li>
+          <a href={`/blog/${post.slug}/`}>
+            {post.data.title}
+          </a>
+        </li>
+      ))}
+    </ul>
   </section>
 </Layout>
