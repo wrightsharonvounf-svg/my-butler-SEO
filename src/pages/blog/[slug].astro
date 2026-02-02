@@ -4,6 +4,15 @@ import { getCollection } from 'astro:content';
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts');
+// Сортируем по дате (новые сверху)
+const sortedPosts = posts.sort(
+  (a, b) => new Date(b.data.pubDate) - new Date(a.data.pubDate)
+);
+
+const currentIndex = sortedPosts.findIndex(p => p.slug === post.slug);
+
+const prevPost = sortedPosts[currentIndex + 1];
+const nextPost = sortedPosts[currentIndex - 1];
 
   return posts.map(post => ({
     params: { slug: post.slug },
@@ -21,3 +30,22 @@ const { Content } = await post.render();
     <Content />
   </article>
 </PostLayout>
+
+<section style="margin-top:3rem; padding-top:2rem; border-top:1px solid #eee;">
+  <div style="display:flex; justify-content:space-between; gap:1rem;">
+    
+    {prevPost && (
+      <a href={`/blog/${prevPost.slug}/`}>
+        ← {prevPost.data.title}
+      </a>
+    )}
+
+    {nextPost && (
+      <a href={`/blog/${nextPost.slug}/`} style="margin-left:auto;">
+        {nextPost.data.title} →
+      </a>
+    )}
+
+  </div>
+</section>
+
