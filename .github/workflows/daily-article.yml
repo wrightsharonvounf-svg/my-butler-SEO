@@ -1,49 +1,39 @@
-name: Auto Generate + Deploy
+name: Daily Article Generator
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # каждый день
+    - cron: '0 5 * * *'   # каждый день в 05:00 UTC
   workflow_dispatch:
-  push:
-    branches: [main]
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
 
 jobs:
-  build-and-deploy:
+  generate:
     runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
+    permissions:
+      contents: write
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - run: npm install
+      - name: Install dependencies
+        run: npm install
 
       - name: Generate article
- 	 run: npm run factory
-  	env:
-  	  DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: npm run factory
 
-
-      - name: Commit changes if any
+      - name: Commit and push if changed
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add .
-          git diff --quiet && git diff --staged --quiet || git commit -m "Автогенерация статьи"
+          git diff --cached --quiet || git commit -m "Автогенерация статьи"
           git push
 
-      - name: Build site
-        run: npm run build
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-      - uses: actions/deploy-pages@v4
