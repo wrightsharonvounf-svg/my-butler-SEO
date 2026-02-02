@@ -2,21 +2,20 @@
 import PostLayout from '../../layouts/PostLayout.astro';
 import { getCollection } from 'astro:content';
 
-const posts = await getCollection('posts');
-
-// сортировка по дате
-const sortedPosts = posts.sort(
-  (a, b) => new Date(b.data.pubDate) - new Date(a.data.pubDate)
-);
-
 export async function getStaticPaths() {
+  const posts = await getCollection('posts');
+
+  const sortedPosts = posts.sort(
+    (a, b) => new Date(b.data.pubDate) - new Date(a.data.pubDate)
+  );
+
   return sortedPosts.map(post => ({
     params: { slug: post.slug },
-    props: { post },
+    props: { post, sortedPosts },
   }));
 }
 
-const { post } = Astro.props;
+const { post, sortedPosts } = Astro.props;
 const { Content } = await post.render();
 
 // поиск предыдущей / следующей
@@ -26,10 +25,7 @@ const nextPost = sortedPosts[currentIndex - 1];
 ---
 
 <PostLayout content={post.data}>
-
-  <article>
-    <Content />
-  </article>
+  <Content />
 
   <div style="margin-top: 3rem; display: flex; justify-content: space-between;">
     {prevPost && (
@@ -44,5 +40,4 @@ const nextPost = sortedPosts[currentIndex - 1];
       </a>
     )}
   </div>
-
 </PostLayout>
