@@ -2,15 +2,19 @@
 import PostLayout from '../../layouts/PostLayout.astro';
 import { getCollection } from 'astro:content';
 
+// Получаем все посты
 const posts = await getCollection('posts');
 
-// сортировка по дате
+// Сортируем по дате (новые сверху)
 const sortedPosts = posts.sort(
   (a, b) => new Date(b.data.pubDate) - new Date(a.data.pubDate)
 );
 
+// Генерация путей
 export async function getStaticPaths() {
-  return sortedPosts.map(post => ({
+  const posts = await getCollection('posts');
+
+  return posts.map(post => ({
     params: { slug: post.slug },
     props: { post },
   }));
@@ -19,29 +23,30 @@ export async function getStaticPaths() {
 const { post } = Astro.props;
 const { Content } = await post.render();
 
-// поиск текущей позиции
+// Индекс текущей статьи
 const currentIndex = sortedPosts.findIndex(p => p.slug === post.slug);
+
 const prevPost = sortedPosts[currentIndex + 1];
 const nextPost = sortedPosts[currentIndex - 1];
 ---
-
 
 <PostLayout content={post.data}>
   <article>
     <h1>{post.data.title}</h1>
     <Content />
   </article>
-</PostLayout>
 
-<section style="margin-top: 3rem; display:flex; justify-content:space-between;">
-  {prevPost && (
-    <a href={`/blog/${prevPost.slug}/`}>
-      ← {prevPost.data.title}
-    </a>
-  )}
-  {nextPost && (
-    <a href={`/blog/${nextPost.slug}/`}>
-      {nextPost.data.title} →
-    </a>
-  )}
-</section>
+  <section style="margin-top: 3rem; display:flex; justify-content:space-between;">
+    {prevPost && (
+      <a href={`/blog/${prevPost.slug}/`}>
+        ← {prevPost.data.title}
+      </a>
+    )}
+
+    {nextPost && (
+      <a href={`/blog/${nextPost.slug}/`}>
+        {nextPost.data.title} →
+      </a>
+    )}
+  </section>
+</PostLayout>
