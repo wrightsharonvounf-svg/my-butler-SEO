@@ -1,4 +1,5 @@
-// factory.js v3.0 — стабильная генерация без обрывов
+// factory.js — версия 3.1 (FAQ + Schema + стабильная генерация)
+
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
@@ -9,16 +10,23 @@ const POSTS_DIR = "./src/content/posts";
 const TOPICS_FILE = "topics.txt";
 const QUEUE_FILE = "topics-queue.txt";
 
+// ======================
+// Проверка API ключа
+// ======================
+
 if (!process.env.DEEPSEEK_API_KEY) {
   console.error("❌ Нет DEEPSEEK_API_KEY");
   process.exit(1);
 }
 
+// ======================
+// Утилиты
+// ======================
+
 if (!fs.existsSync(POSTS_DIR)) {
   fs.mkdirSync(POSTS_DIR, { recursive: true });
 }
 
-// Транслитерация
 function transliterate(title) {
   const ru = {
     а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"yo",ж:"zh",
@@ -27,7 +35,8 @@ function transliterate(title) {
     ч:"ch",ш:"sh",щ:"shch",ъ:"",ы:"y",ь:"",э:"e",ю:"yu",я:"ya"
   };
 
-  return title.toLowerCase()
+  return title
+    .toLowerCase()
     .split("")
     .map(c => ru[c] || c)
     .join("")
@@ -36,65 +45,99 @@ function transliterate(title) {
     .replace(/^-+|-+$/g, "");
 }
 
-// === Запрос к DeepSeek ===
-async function askAI(prompt) {
+// ======================
+// Универсальный AI запрос
+// ======================
+
+async function askAI(prompt, maxTokens = 1800) {
   const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`
+      "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`
     },
     body: JSON.stringify({
       model: "deepseek-chat",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
-      max_tokens: 3500
+      max_tokens: maxTokens
     })
   });
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "AI error");
+    throw new Error(data.error?.message || "DeepSeek error");
   }
 
   return data.choices[0].message.content.trim();
 }
 
-// === Генерация статьи ===
+// ======================
+// Генерация статьи
+// ======================
+
 async function generateArticle(topic) {
-  console.log("🤖 Генерация основной части...");
+  console.log("✍ Генерация статьи...");
 
-  const basePrompt = `
-Напиши подробную SEO-статью на русском языке на тему: "${topic}"
+  const prompt = `
+Напиши SEO-статью на русском языке на тему: "${topic}".
 
-ТРЕБОВАНИЯ:
-- Объем 1500–2000 слов
-- НЕ добавляй заголовок H1
-- Начинай сразу с введения
-- Используй подзаголовки H2 и H3
-- Не используй символы # или **
-- Текст должен быть цельным и логически завершенным
+Требования:
+- Объем 1200–1600 слов
+- НЕ добавляй H1
+- Используй только H2 и H3
+- Без markdown типа ** или #
+- Начни с введения
+- Структурированный текст
+- Без обрывов
 `;
 
-  let article = await askAI(basePrompt);
-
-  // Если текст слишком короткий — догенерируем
-  if (article.length < 4000) {
-    console.log("🔄 Текст короткий, догенерируем продолжение...");
-    const continuationPrompt = `
-Продолжи статью на тему "${topic}".
-Добавь еще 3-4 смысловых блока.
-Не повторяй уже написанное.
-`;
-    const continuation = await askAI(continuationPrompt);
-    article += "\n\n" + continuation;
-  }
-
-  return article;
+  return await askAI(prompt, 2500);
 }
 
-// === Создание статьи ===
+// ======================
+// Генерация FAQ
+// ======================
+
+async function generateFAQ(topic) {
+  console.log("🧠 Генерация FAQ...");
+
+  const prompt = `
+Сгенерируй 5 популярных вопросов и ответов по теме: "${topic}".
+
+Требования:
+- Реальные поисковые формулировки
+- Ответ 2–4 предложения
+- Без markdown
+- Формат строго:
+
+Вопрос: ...
+Ответ: ...
+`;
+
+  const raw = await askAI(prompt, 800);
+
+  const faqItems = [];
+  const blocks = raw.split("Вопрос:").filter(Boolean);
+
+  blocks.forEach(block => {
+    const parts = block.split("Ответ:");
+    if (parts.length === 2) {
+      faqItems.push({
+        question: parts[0].trim(),
+        answer: parts[1].trim()
+      });
+    }
+  });
+
+  return faqItems.slice(0, 5);
+}
+
+// ======================
+// Создание статьи
+// ======================
+
 async function createPost(topic) {
   const title = topic.trim();
   const slug = transliterate(title);
@@ -103,13 +146,41 @@ async function createPost(topic) {
   const filepath = path.join(POSTS_DIR, filename);
 
   if (fs.existsSync(filepath)) {
-    console.log("⚠️ Уже существует");
+    console.log("⚠ Уже существует");
     return;
   }
 
-  const content = await generateArticle(title);
+  try {
+    const content = await generateArticle(title);
+    const faqItems = await generateFAQ(title);
 
-  const frontmatter = `---
+    // ----- FAQ Markdown -----
+    let faqSection = "\n\n## Часто задаваемые вопросы\n\n";
+
+    faqItems.forEach(item => {
+      faqSection += `### ${item.question}\n${item.answer}\n\n`;
+    });
+
+    // ----- FAQ Schema -----
+    const faqSchema = `
+<script type="application/ld+json">
+${JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": faqItems.map(item => ({
+    "@type": "Question",
+    "name": item.question,
+    "acceptedAnswer": {
+      "@type": "Answer",
+      "text": item.answer
+    }
+  }))
+}, null, 2)}
+</script>
+`;
+
+    const fullContent = `
+---
 title: "${title}"
 description: "${title}"
 pubDate: "${pubDate}"
@@ -117,13 +188,24 @@ author: "Butler SEO Bot"
 ---
 
 ${content}
+
+${faqSection}
+
+${faqSchema}
 `;
 
-  fs.writeFileSync(filepath, frontmatter, "utf-8");
-  console.log("✅ Статья создана:", filename);
+    fs.writeFileSync(filepath, fullContent, "utf-8");
+    console.log(`✅ Создано: ${filename}`);
+
+  } catch (err) {
+    console.error("❌ Ошибка:", err.message);
+  }
 }
 
-// === Очередь ===
+// ======================
+// Очередь
+// ======================
+
 function readList(file) {
   if (!fs.existsSync(file)) return [];
   return fs.readFileSync(file, "utf-8")
@@ -136,12 +218,16 @@ function writeList(file, list) {
   fs.writeFileSync(file, list.join("\n"), "utf-8");
 }
 
+// ======================
+// Запуск
+// ======================
+
 (async function runFactory() {
   let topics = readList(TOPICS_FILE);
 
   if (topics.length > 0) {
     const topic = topics.shift();
-    console.log("📝 Генерируем:", topic);
+    console.log(`📝 Генерируем: ${topic}`);
     await createPost(topic);
     writeList(TOPICS_FILE, topics);
     process.exit(0);
@@ -158,6 +244,6 @@ function writeList(file, list) {
   writeList(TOPICS_FILE, [next]);
   writeList(QUEUE_FILE, queue);
 
-  console.log("📥 Переносим в публикацию:", next);
+  console.log(`📥 Переносим в публикацию: ${next}`);
   await createPost(next);
 })();
