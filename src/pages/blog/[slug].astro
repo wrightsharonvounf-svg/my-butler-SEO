@@ -2,42 +2,72 @@
 import PostLayout from '../../layouts/PostLayout.astro';
 import { getCollection } from 'astro:content';
 
+// Получаем все статьи
+const posts = await getCollection('posts');
+
+// Сортируем по дате (новые сверху)
+const sortedPosts = posts.sort(
+  (a, b) => new Date(b.data.pubDate) - new Date(a.data.pubDate)
+);
+
+// Static paths
 export async function getStaticPaths() {
-  const posts = await getCollection('posts');
-
-  const sortedPosts = posts.sort(
-    (a, b) => new Date(b.data.pubDate) - new Date(a.data.pubDate)
-  );
-
   return sortedPosts.map(post => ({
     params: { slug: post.slug },
-    props: { post, sortedPosts },
+    props: { post }
   }));
 }
 
-const { post, sortedPosts } = Astro.props;
+const { post } = Astro.props;
 const { Content } = await post.render();
 
-// поиск предыдущей / следующей
+// Индекс текущей статьи
 const currentIndex = sortedPosts.findIndex(p => p.slug === post.slug);
+
+// Предыдущая и следующая
 const prevPost = sortedPosts[currentIndex + 1];
 const nextPost = sortedPosts[currentIndex - 1];
 ---
 
 <PostLayout content={post.data}>
-  <Content />
+  <article>
+    <Content />
+  </article>
 
-  <div style="margin-top: 3rem; display: flex; justify-content: space-between;">
+  <!-- Навигация по датам -->
+  <nav style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #eee;">
     {prevPost && (
-      <a href={`/blog/${prevPost.slug}/`}>
-        ← {prevPost.data.title}
-      </a>
+      <div>
+        ← <a href={`/blog/${prevPost.slug}/`}>
+          {prevPost.data.title}
+        </a>
+      </div>
     )}
 
     {nextPost && (
-      <a href={`/blog/${nextPost.slug}/`}>
-        {nextPost.data.title} →
-      </a>
+      <div style="margin-top: 1rem;">
+        <a href={`/blog/${nextPost.slug}/`}>
+          {nextPost.data.title}
+        </a> →
+      </div>
     )}
-  </div>
+  </nav>
+
+  <!-- Блок похожих статей -->
+  <section style="margin-top: 3rem;">
+    <h3>Похожие статьи</h3>
+    <ul>
+      {sortedPosts
+        .filter(p => p.slug !== post.slug)
+        .slice(0, 4)
+        .map(p => (
+          <li>
+            <a href={`/blog/${p.slug}/`}>
+              {p.data.title}
+            </a>
+          </li>
+      ))}
+    </ul>
+  </section>
+
 </PostLayout>
