@@ -63,7 +63,7 @@ async function callDeepSeek(prompt) {
       model: "deepseek-chat",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
-      max_tokens: 1300
+      max_tokens: 2500
     })
   });
 
@@ -84,8 +84,9 @@ async function generateArticle(topic) {
 - Без H1
 - Без markdown-звездочек
 - Используй подзаголовки H2 и H3
-- 1000+ слов
+- 2000+ слов
 - В конце добавь раздел FAQ с 3 вопросами
+- Обязательно допиши финал статьи
 
 Начинай сразу с текста.
 `;
