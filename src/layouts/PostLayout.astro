@@ -40,6 +40,34 @@ const { content } = Astro.props;
   <section>
     <slot />
   </section>
+  {content.faq && content.faq.length > 0 && (
+  <section style="margin-top:3rem;padding-top:2rem;border-top:1px solid #eee;">
+    <h2>Часто задаваемые вопросы</h2>
+
+    {content.faq.map((item) => (
+      <div style="margin-bottom:1.5rem;">
+        <h3 style="font-size:1.1rem;">{item.q}</h3>
+        <p>{item.a}</p>
+      </div>
+    ))}
+  </section>
+)}
+{content.faq && content.faq.length > 0 && (
+<script type="application/ld+json">
+{JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": content.faq.map(item => ({
+    "@type": "Question",
+    "name": item.q,
+    "acceptedAnswer": {
+      "@type": "Answer",
+      "text": item.a
+    }
+  }))
+})}
+</script>
+)}
 
   <footer style="margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee;">
     © {new Date().getFullYear()} Butler Tim
