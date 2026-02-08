@@ -1,7 +1,5 @@
 ---
-// src/layouts/PostLayout.astro
 import Layout from './Layout.astro';
-
 const { content } = Astro.props;
 ---
 
@@ -27,9 +25,10 @@ const { content } = Astro.props;
 </nav>
 
 <article class="max-w-4xl mx-auto p-6">
+
   <header class="mb-8">
     <h1>{content.title}</h1>
-    <p style="color: #666;">
+    <p style="color:#666;">
       <time datetime={content.pubDate}>
         {new Date(content.pubDate).toLocaleDateString('ru-RU')}
       </time>
@@ -40,46 +39,42 @@ const { content } = Astro.props;
   <section>
     <slot />
   </section>
+
   {content.faq && content.faq.length > 0 && (
-  <section style="margin-top:3rem;padding-top:2rem;border-top:1px solid #eee;">
-    <h2>Часто задаваемые вопросы</h2>
+    <section style="margin-top:3rem;padding-top:2rem;border-top:1px solid #eee;">
+      <h2>Часто задаваемые вопросы</h2>
 
-    {content.faq.map((item) => (
-      <div style="margin-bottom:1.5rem;">
-        <h3 style="font-size:1.1rem;">{item.q}</h3>
-        <p>{item.a}</p>
-      </div>
-    ))}
-  </section>
-)}
-{content.faq && content.faq.length > 0 && (
-<script type="application/ld+json">
-{JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": content.faq.map(item => ({
-    "@type": "Question",
-    "name": item.q,
-    "acceptedAnswer": {
-      "@type": "Answer",
-      "text": item.a
-    }
-  }))
-})}
-</script>
-)}
+      {content.faq.map(item => (
+        <div style="margin-bottom:1.5rem;">
+          <h3>{item.question}</h3>
+          <p>{item.answer}</p>
+        </div>
+      ))}
+    </section>
+  )}
 
-  <footer style="margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee;">
+  {content.faq && content.faq.length > 0 && (
+    <script type="application/ld+json">
+      {JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": content.faq.map(item => ({
+          "@type": "Question",
+          "name": item.question,
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": item.answer
+          }
+        }))
+      })}
+    </script>
+  )}
+
+  <footer style="margin-top:3rem;padding-top:1rem;border-top:1px solid #eee;">
     © {new Date().getFullYear()} Butler Tim
   </footer>
-	
- <script type="application/ld+json">
- {JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": content.faq || []
- })}
- </script>
+
 </article>
 
 </Layout>
+

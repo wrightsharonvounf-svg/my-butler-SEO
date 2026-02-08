@@ -84,14 +84,14 @@ async function generateArticle(topic) {
 - НЕ пиши заголовок H1
 - Начинай сразу с введения
 - Используй только подзаголовки H2
-- Объем 1200-1500 слов
+- Объем 2200-2500 слов
 - Не используй markdown символы ** или #
 - Заканчивай логичным выводом
 
 Статья должна быть полностью завершенной.
 `;
 
-  const text = await callDeepSeek(prompt, 1800);
+  const text = await callDeepSeek(prompt, 2800);
 
   if (text.length < 800) {
     throw new Error("Слишком короткая статья — отмена публикации");
@@ -176,22 +176,7 @@ faq: ${JSON.stringify(faq, null, 2)}
       faqSection += `### ${item.question}\n${item.answer}\n\n`;
     });
 
-    faqSection += `
-<script type="application/ld+json">
-${JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": faq.map(q => ({
-    "@type": "Question",
-    "name": q.question,
-    "acceptedAnswer": {
-      "@type": "Answer",
-      "text": q.answer
-    }
-  }))
-}, null, 2)}
-</script>
-`;
+
   }
 
   fs.writeFileSync(
