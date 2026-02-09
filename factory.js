@@ -1,4 +1,3 @@
-// FACTORY 4.5 STABLE LONG VERSION
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
@@ -13,10 +12,6 @@ if (!process.env.DEEPSEEK_API_KEY) {
   console.error("❌ Нет DEEPSEEK_API_KEY");
   process.exit(1);
 }
-
-// --------------------------------
-// ВСПОМОГАТЕЛЬНЫЕ
-// --------------------------------
 
 function transliterate(text) {
   const map = {
@@ -48,7 +43,7 @@ function writeList(file, list) {
   fs.writeFileSync(file, list.join("\n"), "utf-8");
 }
 
-async function callDeepSeek(prompt, tokens = 2000) {
+async function callDeepSeek(prompt, maxTokens = 2000) {
   const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -59,7 +54,7 @@ async function callDeepSeek(prompt, tokens = 2000) {
       model: "deepseek-chat",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
-      max_tokens: tokens
+      max_tokens: maxTokens
     })
   });
 
@@ -72,89 +67,59 @@ async function callDeepSeek(prompt, tokens = 2000) {
   return data.choices[0].message.content.trim();
 }
 
-// --------------------------------
+// -----------------------------
 // ГЕНЕРАЦИЯ СТАТЬИ
-// --------------------------------
+// -----------------------------
 
 async function generateArticle(topic) {
-  const basePrompt = `
-Напиши экспертную SEO-статью на русском языке на тему: "${topic}"
 
-Требования:
+  const prompt = `
+Напиши подробную экспертную SEO-статью на русском языке на тему: "${topic}"
+
+ВАЖНО:
 - НЕ пиши заголовок H1
-- Начни сразу с введения
+- Начинай с введения
 - Используй подзаголовки H2
-- Объем минимум 1800 слов
-- Заверши полноценным выводом
-- Статья должна быть полностью завершенной
+- Объем минимум 1500 слов
+- Без markdown символов типа ** и #
+- Статья должна быть полностью законченной
 `;
 
-  let fullText = "";
-  let attempts = 0;
-  let continuePrompt = basePrompt;
+  let text = await callDeepSeek(prompt, 2200);
 
-  while (attempts < 3) {
-    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [{ role: "user", content: continuePrompt }],
-        temperature: 0.7,
-        max_tokens: 2000
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error("Ошибка генерации статьи");
-    }
-
-    const chunk = data.choices[0].message.content.trim();
-    fullText += "\n\n" + chunk;
-
-    const finishReason = data.choices[0].finish_reason;
-
-    if (finishReason !== "length") {
-      break;
-    }
-
-    // если обрезало — просим продолжить
-    continuePrompt = `
-Продолжи статью с того места, где она оборвалась.
-Не повторяй уже написанный текст.
-Продолжай логично.
-`;
-    
-    attempts++;
+  // если статья короткая — просим дописать
+  if (text.length < 4000) {
+    console.log("➕ Дописываем статью...");
+    const continuation = await callDeepSeek(
+      `Продолжи и заверши статью по теме "${topic}". Не повторяй текст. Добавь финальный вывод.`,
+      1200
+    );
+    text += "\n\n" + continuation;
   }
 
-  if (fullText.length < 1500) {
-    throw new Error("Статья слишком короткая — отмена публикации");
+  if (text.length < 3000) {
+    throw new Error("Статья слишком короткая, отмена публикации");
   }
 
-  return fullText.trim();
+  return text;
 }
 
-// --------------------------------
+// -----------------------------
 // СОЗДАНИЕ ПОСТА
-// --------------------------------
+// -----------------------------
 
 async function createPost(topic) {
+
   const title = topic.trim();
   const slug = transliterate(title);
   const date = new Date().toISOString().split("T")[0];
 
-  const filename = `${slug}-${date}.md`;
-  const filepath = path.join(POSTS_DIR, filename);
-
   if (!fs.existsSync(POSTS_DIR)) {
     fs.mkdirSync(POSTS_DIR, { recursive: true });
   }
+
+  const filename = `${slug}-${date}.md`;
+  const filepath = path.join(POSTS_DIR, filename);
 
   if (fs.existsSync(filepath)) {
     console.log("⚠ Уже существует:", filename);
@@ -162,12 +127,7 @@ async function createPost(topic) {
   }
 
   console.log("📝 Генерируем статью...");
-  const article = await generateLongArticle(title);
-
-  if (article.length < 4000) {
-    console.log("❌ Статья слишком короткая. Публикация отменена.");
-    return;
-  }
+  const article = await generateArticle(title);
 
   const frontmatter = `---
 title: "${title}"
@@ -175,23 +135,21 @@ description: "${title}"
 pubDate: "${date}"
 author: "Butler SEO Bot"
 ---
+
 `;
 
-  fs.writeFileSync(
-    filepath,
-    frontmatter + "\n" + article,
-    "utf-8"
-  );
+  fs.writeFileSync(filepath, frontmatter + article, "utf-8");
 
   console.log("✅ Создано:", filename);
 }
 
-// --------------------------------
+// -----------------------------
 // ЗАПУСК
-// --------------------------------
+// -----------------------------
 
 (async function run() {
   try {
+
     let topics = readList(TOPICS_FILE);
 
     if (topics.length > 0) {
