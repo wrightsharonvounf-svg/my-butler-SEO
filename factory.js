@@ -1,4 +1,4 @@
-// FACTORY 4.4 MULTI-STAGE STABLE
+// FACTORY 4.5 STABLE LONG VERSION
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
@@ -14,9 +14,9 @@ if (!process.env.DEEPSEEK_API_KEY) {
   process.exit(1);
 }
 
-// ------------------------------------------------
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-// ------------------------------------------------
+// --------------------------------
+// ВСПОМОГАТЕЛЬНЫЕ
+// --------------------------------
 
 function transliterate(text) {
   const map = {
@@ -48,7 +48,7 @@ function writeList(file, list) {
   fs.writeFileSync(file, list.join("\n"), "utf-8");
 }
 
-async function callDeepSeek(prompt, maxTokens = 1200) {
+async function callDeepSeek(prompt, tokens = 2000) {
   const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -59,7 +59,7 @@ async function callDeepSeek(prompt, maxTokens = 1200) {
       model: "deepseek-chat",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
-      max_tokens: maxTokens
+      max_tokens: tokens
     })
   });
 
@@ -72,119 +72,47 @@ async function callDeepSeek(prompt, maxTokens = 1200) {
   return data.choices[0].message.content.trim();
 }
 
-// ------------------------------------------------
-// MULTI-STAGE ГЕНЕРАЦИЯ СТАТЬИ
-// ------------------------------------------------
+// --------------------------------
+// ГЕНЕРАЦИЯ СТАТЬИ
+// --------------------------------
 
-async function generateStructure(topic) {
+async function generateLongArticle(topic) {
+
   const prompt = `
-Создай структуру SEO-статьи на тему "${topic}".
+Напиши большую экспертную SEO-статью на русском языке на тему: "${topic}"
 
-Ответ строго в JSON формате:
+ТРЕБОВАНИЯ:
+- НЕ пиши H1
+- Начни с введения
+- Используй только подзаголовки H2
+- Объем 1500–2000 слов
+- Без markdown символов ** и #
+- Заверши статью логичным выводом
+- Текст должен быть полностью завершён
 
-{
-  "sections": [
-    "Название раздела 1",
-    "Название раздела 2",
-    "Название раздела 3",
-    "Название раздела 4"
-  ]
-}
-
-Без пояснений.
+Статья должна быть подробной, глубокой и структурированной.
 `;
 
-  const raw = await callDeepSeek(prompt, 400);
+  let text = await callDeepSeek(prompt, 2200);
 
-  try {
-    const jsonStart = raw.indexOf("{");
-    const json = JSON.parse(raw.slice(jsonStart));
-    return json.sections.slice(0, 4);
-  } catch {
-    throw new Error("Ошибка генерации структуры");
-  }
-}
+  // если текст слишком короткий — пробуем один раз дописать
+  if (text.length < 6000) {
+    console.log("⚠ Статья короткая — пробуем дописать...");
 
-async function generateIntro(topic) {
-  return await callDeepSeek(`
-Напиши введение к статье на тему "${topic}".
-Без заголовков.
-300-400 слов.
-`, 700);
-}
+    const continuation = await callDeepSeek(
+      `Продолжи и логически заверши статью на тему "${topic}". Без повторов начала.`,
+      1500
+    );
 
-async function generateSection(topic, sectionTitle) {
-  return await callDeepSeek(`
-Напиши раздел статьи "${sectionTitle}" по теме "${topic}".
-Используй только текст.
-500-700 слов.
-`, 1000);
-}
-
-async function generateConclusion(topic) {
-  return await callDeepSeek(`
-Напиши заключение к статье "${topic}".
-300-400 слов.
-Без заголовков.
-`, 600);
-}
-
-async function generateFullArticle(topic) {
-  console.log("📐 Генерируем структуру...");
-  const sections = await generateStructure(topic);
-
-  console.log("✍ Генерируем введение...");
-  const intro = await generateIntro(topic);
-
-  let body = intro + "\n\n";
-
-  for (const section of sections) {
-    console.log("📄 Генерируем раздел:", section);
-    const content = await generateSection(topic, section);
-    body += `## ${section}\n\n${content}\n\n`;
+    text += "\n\n" + continuation;
   }
 
-  console.log("🔚 Генерируем заключение...");
-  const conclusion = await generateConclusion(topic);
-
-  body += conclusion;
-
-  if (body.length < 3000) {
-    throw new Error("Статья слишком короткая — отмена публикации");
-  }
-
-  return body;
+  return text;
 }
 
-// ------------------------------------------------
-// FAQ
-// ------------------------------------------------
-
-async function generateFAQ(topic) {
-  const prompt = `
-Сгенерируй 3 вопроса и ответа по теме "${topic}".
-
-Ответ строго JSON:
-
-[
-  { "question": "...", "answer": "..." }
-]
-`;
-
-  const raw = await callDeepSeek(prompt, 500);
-
-  try {
-    const jsonStart = raw.indexOf("[");
-    const json = JSON.parse(raw.slice(jsonStart));
-    return json.slice(0, 3);
-  } catch {
-    return [];
-  }
-}
-
-// ------------------------------------------------
+// --------------------------------
 // СОЗДАНИЕ ПОСТА
-// ------------------------------------------------
+// --------------------------------
 
 async function createPost(topic) {
   const title = topic.trim();
@@ -203,26 +131,34 @@ async function createPost(topic) {
     return;
   }
 
-  const article = await generateFullArticle(title);
-  const faq = await generateFAQ(title);
+  console.log("📝 Генерируем статью...");
+  const article = await generateLongArticle(title);
+
+  if (article.length < 4000) {
+    console.log("❌ Статья слишком короткая. Публикация отменена.");
+    return;
+  }
 
   const frontmatter = `---
 title: "${title}"
 description: "${title}"
 pubDate: "${date}"
 author: "Butler SEO Bot"
-faq: ${JSON.stringify(faq, null, 2)}
 ---
 `;
 
-  fs.writeFileSync(filepath, frontmatter + "\n" + article, "utf-8");
+  fs.writeFileSync(
+    filepath,
+    frontmatter + "\n" + article,
+    "utf-8"
+  );
 
   console.log("✅ Создано:", filename);
 }
 
-// ------------------------------------------------
+// --------------------------------
 // ЗАПУСК
-// ------------------------------------------------
+// --------------------------------
 
 (async function run() {
   try {
