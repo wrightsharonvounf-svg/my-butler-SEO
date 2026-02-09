@@ -76,38 +76,68 @@ async function callDeepSeek(prompt, tokens = 2000) {
 // ГЕНЕРАЦИЯ СТАТЬИ
 // --------------------------------
 
-async function generateLongArticle(topic) {
+async function generateArticle(topic) {
+  const basePrompt = `
+Напиши экспертную SEO-статью на русском языке на тему: "${topic}"
 
-  const prompt = `
-Напиши большую экспертную SEO-статью на русском языке на тему: "${topic}"
-
-ТРЕБОВАНИЯ:
-- НЕ пиши H1
-- Начни с введения
-- Используй только подзаголовки H2
-- Объем 1500–2000 слов
-- Без markdown символов ** и #
-- Заверши статью логичным выводом
-- Текст должен быть полностью завершён
-
-Статья должна быть подробной, глубокой и структурированной.
+Требования:
+- НЕ пиши заголовок H1
+- Начни сразу с введения
+- Используй подзаголовки H2
+- Объем минимум 1800 слов
+- Заверши полноценным выводом
+- Статья должна быть полностью завершенной
 `;
 
-  let text = await callDeepSeek(prompt, 2200);
+  let fullText = "";
+  let attempts = 0;
+  let continuePrompt = basePrompt;
 
-  // если текст слишком короткий — пробуем один раз дописать
-  if (text.length < 6000) {
-    console.log("⚠ Статья короткая — пробуем дописать...");
+  while (attempts < 3) {
+    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [{ role: "user", content: continuePrompt }],
+        temperature: 0.7,
+        max_tokens: 2000
+      })
+    });
 
-    const continuation = await callDeepSeek(
-      `Продолжи и логически заверши статью на тему "${topic}". Без повторов начала.`,
-      1500
-    );
+    const data = await response.json();
 
-    text += "\n\n" + continuation;
+    if (!response.ok) {
+      throw new Error("Ошибка генерации статьи");
+    }
+
+    const chunk = data.choices[0].message.content.trim();
+    fullText += "\n\n" + chunk;
+
+    const finishReason = data.choices[0].finish_reason;
+
+    if (finishReason !== "length") {
+      break;
+    }
+
+    // если обрезало — просим продолжить
+    continuePrompt = `
+Продолжи статью с того места, где она оборвалась.
+Не повторяй уже написанный текст.
+Продолжай логично.
+`;
+    
+    attempts++;
   }
 
-  return text;
+  if (fullText.length < 1500) {
+    throw new Error("Статья слишком короткая — отмена публикации");
+  }
+
+  return fullText.trim();
 }
 
 // --------------------------------
