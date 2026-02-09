@@ -1,3 +1,4 @@
+// FACTORY 4.6 — AUTO CONTINUE UNTIL COMPLETE
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
@@ -12,6 +13,10 @@ if (!process.env.DEEPSEEK_API_KEY) {
   console.error("❌ Нет DEEPSEEK_API_KEY");
   process.exit(1);
 }
+
+// ---------------------
+// ВСПОМОГАТЕЛЬНЫЕ
+// ---------------------
 
 function transliterate(text) {
   const map = {
@@ -43,7 +48,7 @@ function writeList(file, list) {
   fs.writeFileSync(file, list.join("\n"), "utf-8");
 }
 
-async function callDeepSeek(prompt, maxTokens = 2000) {
+async function callDeepSeek(messages, maxTokens = 1800) {
   const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -52,7 +57,7 @@ async function callDeepSeek(prompt, maxTokens = 2000) {
     },
     body: JSON.stringify({
       model: "deepseek-chat",
-      messages: [{ role: "user", content: prompt }],
+      messages,
       temperature: 0.7,
       max_tokens: maxTokens
     })
@@ -67,49 +72,75 @@ async function callDeepSeek(prompt, maxTokens = 2000) {
   return data.choices[0].message.content.trim();
 }
 
-// -----------------------------
-// ГЕНЕРАЦИЯ СТАТЬИ
-// -----------------------------
+// ---------------------
+// ПРОВЕРКА ОБРЫВА
+// ---------------------
 
-async function generateArticle(topic) {
+function isTruncated(text) {
+  const lastChar = text.trim().slice(-1);
+  const badEndings = ["и", "в", "к", "на", "-", "—", "что"];
 
-  const prompt = `
-Напиши подробную экспертную SEO-статью на русском языке на тему: "${topic}"
+  if (![".", "!", "?"].includes(lastChar)) return true;
 
-ВАЖНО:
-- НЕ пиши заголовок H1
-- Начинай с введения
-- Используй подзаголовки H2
-- Объем минимум 1500 слов
-- Без markdown символов типа ** и #
-- Статья должна быть полностью законченной
-`;
-
-  let text = await callDeepSeek(prompt, 2200);
-
-  // если статья короткая — просим дописать
-  if (text.length < 4000) {
-    console.log("➕ Дописываем статью...");
-    const continuation = await callDeepSeek(
-      `Продолжи и заверши статью по теме "${topic}". Не повторяй текст. Добавь финальный вывод.`,
-      1200
-    );
-    text += "\n\n" + continuation;
+  for (let word of badEndings) {
+    if (text.trim().endsWith(" " + word)) return true;
   }
 
-  if (text.length < 3000) {
-    throw new Error("Статья слишком короткая, отмена публикации");
-  }
-
-  return text;
+  return false;
 }
 
-// -----------------------------
+// ---------------------
+// ГЕНЕРАЦИЯ С ПРОДОЛЖЕНИЕМ
+// ---------------------
+
+async function generateFullArticle(topic) {
+  let article = "";
+  let messages = [{
+    role: "user",
+    content: `
+Напиши экспертную SEO-статью на русском языке на тему: "${topic}"
+
+ВАЖНО:
+- НЕ пиши H1
+- Используй только H2
+- Объем 1500+ слов
+- Заверши статью полноценным выводом
+`
+  }];
+
+  let attempts = 0;
+
+  while (attempts < 4) {
+    const part = await callDeepSeek(messages);
+    article += "\n\n" + part;
+
+    if (!isTruncated(article) && article.length > 1500) {
+      break;
+    }
+
+    messages = [
+      { role: "assistant", content: article },
+      {
+        role: "user",
+        content: "Продолжи статью с места обрыва. Не повторяй текст. Заверши статью."
+      }
+    ];
+
+    attempts++;
+  }
+
+  if (article.length < 1000) {
+    throw new Error("Статья слишком короткая после продолжений");
+  }
+
+  return article;
+}
+
+// ---------------------
 // СОЗДАНИЕ ПОСТА
-// -----------------------------
+// ---------------------
 
 async function createPost(topic) {
-
   const title = topic.trim();
   const slug = transliterate(title);
   const date = new Date().toISOString().split("T")[0];
@@ -127,7 +158,7 @@ async function createPost(topic) {
   }
 
   console.log("📝 Генерируем статью...");
-  const article = await generateArticle(title);
+  const article = await generateFullArticle(title);
 
   const frontmatter = `---
 title: "${title}"
@@ -135,21 +166,19 @@ description: "${title}"
 pubDate: "${date}"
 author: "Butler SEO Bot"
 ---
-
 `;
 
-  fs.writeFileSync(filepath, frontmatter + article, "utf-8");
+  fs.writeFileSync(filepath, frontmatter + "\n" + article, "utf-8");
 
   console.log("✅ Создано:", filename);
 }
 
-// -----------------------------
+// ---------------------
 // ЗАПУСК
-// -----------------------------
+// ---------------------
 
 (async function run() {
   try {
-
     let topics = readList(TOPICS_FILE);
 
     if (topics.length > 0) {
