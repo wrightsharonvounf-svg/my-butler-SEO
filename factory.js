@@ -1,4 +1,4 @@
-// FACTORY 4.6 — AUTO CONTINUE UNTIL COMPLETE
+// FACTORY 4.7 FINAL STABLE
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
@@ -14,9 +14,9 @@ if (!process.env.DEEPSEEK_API_KEY) {
   process.exit(1);
 }
 
-// ---------------------
-// ВСПОМОГАТЕЛЬНЫЕ
-// ---------------------
+/* -------------------------------------------------- */
+/* ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ */
+/* -------------------------------------------------- */
 
 function transliterate(text) {
   const map = {
@@ -72,73 +72,79 @@ async function callDeepSeek(messages, maxTokens = 1800) {
   return data.choices[0].message.content.trim();
 }
 
-// ---------------------
-// ПРОВЕРКА ОБРЫВА
-// ---------------------
+/* -------------------------------------------------- */
+/* ПРОВЕРКА ОБРЫВА */
+/* -------------------------------------------------- */
 
-function isTruncated(text) {
-  const lastChar = text.trim().slice(-1);
-  const badEndings = ["и", "в", "к", "на", "-", "—", "что"];
+function isComplete(text) {
+  if (!text) return false;
 
-  if (![".", "!", "?"].includes(lastChar)) return true;
+  const trimmed = text.trim();
 
-  for (let word of badEndings) {
-    if (text.trim().endsWith(" " + word)) return true;
+  if (trimmed.length < 1600) return false;
+
+  const lastChar = trimmed.slice(-1);
+  if (![".", "!", "?"].includes(lastChar)) return false;
+
+  if (!trimmed.toLowerCase().includes("заключение") &&
+      !trimmed.toLowerCase().includes("вывод")) {
+    return false;
   }
 
-  return false;
+  return true;
 }
 
-// ---------------------
-// ГЕНЕРАЦИЯ С ПРОДОЛЖЕНИЕМ
-// ---------------------
+/* -------------------------------------------------- */
+/* ГЕНЕРАЦИЯ С АВТО-ПРОДОЛЖЕНИЕМ */
+/* -------------------------------------------------- */
 
-async function generateFullArticle(topic) {
+async function generateArticle(topic) {
   let article = "";
+  let attempts = 0;
+
   let messages = [{
     role: "user",
     content: `
 Напиши экспертную SEO-статью на русском языке на тему: "${topic}"
 
-ВАЖНО:
-- НЕ пиши H1
-- Используй только H2
-- Объем 1500+ слов
-- Заверши статью полноценным выводом
+Требования:
+- Не используй H1
+- Используй H2
+- Объем 1500–2000 слов
+- В конце обязательно добавь раздел "Заключение"
+- Статья должна быть полностью завершенной
 `
   }];
 
-  let attempts = 0;
-
-  while (attempts < 4) {
+  while (attempts < 5) {
     const part = await callDeepSeek(messages);
     article += "\n\n" + part;
 
-    if (!isTruncated(article) && article.length > 1500) {
-      break;
+    if (isComplete(article)) {
+      return article;
     }
 
     messages = [
       { role: "assistant", content: article },
       {
         role: "user",
-        content: "Продолжи статью с места обрыва. Не повторяй текст. Заверши статью."
+        content: "Продолжи статью с места обрыва. Не повторяй текст. Обязательно заверши статью разделом 'Заключение'."
       }
     ];
 
     attempts++;
   }
 
-  if (article.length < 1000) {
-    throw new Error("Статья слишком короткая после продолжений");
+  if (!isComplete(article)) {
+    throw new Error("Статья не завершена корректно");
   }
 
   return article;
 }
 
-// ---------------------
-// СОЗДАНИЕ ПОСТА
-// ---------------------
+/* -------------------------------------------------- */
+/* СОЗДАНИЕ ПОСТА */
+/* -------------------------------------------------- */
 
 async function createPost(topic) {
   const title = topic.trim();
@@ -158,7 +164,7 @@ async function createPost(topic) {
   }
 
   console.log("📝 Генерируем статью...");
-  const article = await generateFullArticle(title);
+  const article = await generateArticle(title);
 
   const frontmatter = `---
 title: "${title}"
@@ -173,9 +179,9 @@ author: "Butler SEO Bot"
   console.log("✅ Создано:", filename);
 }
 
-// ---------------------
-// ЗАПУСК
-// ---------------------
+/* -------------------------------------------------- */
+/* ЗАПУСК */
+/* -------------------------------------------------- */
 
 (async function run() {
   try {
@@ -206,3 +212,4 @@ author: "Butler SEO Bot"
     process.exit(1);
   }
 })();
+
