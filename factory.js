@@ -1,5 +1,7 @@
-// FACTORY 4.7 FINAL STABLE
-import fs from "fs";
+// FACTORY 6.0 — SEO BRAIN
+// Production-grade article generator with duplicate protection
+
+import fs from "fs/promises";
 import path from "path";
 import dotenv from "dotenv";
 
@@ -10,13 +12,20 @@ const TOPICS_FILE = "topics.txt";
 const QUEUE_FILE = "topics-queue.txt";
 
 if (!process.env.DEEPSEEK_API_KEY) {
-  console.error("❌ Нет DEEPSEEK_API_KEY");
+  console.error("❌ Missing DEEPSEEK_API_KEY");
   process.exit(1);
 }
 
-/* -------------------------------------------------- */
-/* ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ */
-/* -------------------------------------------------- */
+/* ============================================================
+   UTILITIES
+============================================================ */
+
+const log = {
+  info: (msg) => console.log(`ℹ️  ${msg}`),
+  success: (msg) => console.log(`✅ ${msg}`),
+  warn: (msg) => console.log(`⚠️  ${msg}`),
+  error: (msg) => console.error(`❌ ${msg}`)
+};
 
 function transliterate(text) {
   const map = {
@@ -36,17 +45,57 @@ function transliterate(text) {
     .trim();
 }
 
-function readList(file) {
-  if (!fs.existsSync(file)) return [];
-  return fs.readFileSync(file, "utf-8")
-    .split("\n")
-    .map(t => t.trim())
-    .filter(Boolean);
+async function ensureDir(dir) {
+  await fs.mkdir(dir, { recursive: true });
 }
 
-function writeList(file, list) {
-  fs.writeFileSync(file, list.join("\n"), "utf-8");
+async function readLines(file) {
+  try {
+    const data = await fs.readFile(file, "utf-8");
+    return data.split("\n").map(l => l.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
+
+async function writeLines(file, lines) {
+  await fs.writeFile(file, lines.join("\n"), "utf-8");
+}
+
+/* ============================================================
+   DUPLICATE PROTECTION ENGINE
+============================================================ */
+
+async function getExistingPostsMeta() {
+  try {
+    const files = await fs.readdir(POSTS_DIR);
+    return files.filter(f => f.endsWith(".md"));
+  } catch {
+    return [];
+  }
+}
+
+async function slugExists(slug) {
+  const files = await getExistingPostsMeta();
+  return files.some(f => f.startsWith(slug + "-"));
+}
+
+async function titleExists(title) {
+  const files = await getExistingPostsMeta();
+
+  for (const file of files) {
+    const content = await fs.readFile(path.join(POSTS_DIR, file), "utf-8");
+    if (content.includes(`title: "${title}"`)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/* ============================================================
+   AI ENGINE
+============================================================ */
 
 async function callDeepSeek(messages, maxTokens = 1800) {
   const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -72,31 +121,17 @@ async function callDeepSeek(messages, maxTokens = 1800) {
   return data.choices[0].message.content.trim();
 }
 
-/* -------------------------------------------------- */
-/* ПРОВЕРКА ОБРЫВА */
-/* -------------------------------------------------- */
+function isComplete(article) {
+  const text = article.trim();
 
-function isComplete(text) {
-  if (!text) return false;
+  if (text.length < 1800) return false;
+  if (!text.toLowerCase().includes("заключение")) return false;
 
-  const trimmed = text.trim();
-
-  if (trimmed.length < 1600) return false;
-
-  const lastChar = trimmed.slice(-1);
+  const lastChar = text.slice(-1);
   if (![".", "!", "?"].includes(lastChar)) return false;
-
-  if (!trimmed.toLowerCase().includes("заключение") &&
-      !trimmed.toLowerCase().includes("вывод")) {
-    return false;
-  }
 
   return true;
 }
-
-/* -------------------------------------------------- */
-/* ГЕНЕРАЦИЯ С АВТО-ПРОДОЛЖЕНИЕМ */
-/* -------------------------------------------------- */
 
 async function generateArticle(topic) {
   let article = "";
@@ -110,7 +145,7 @@ async function generateArticle(topic) {
 Требования:
 - Не используй H1
 - Используй H2
-- Объем 1500–2000 слов
+- Объем 1800+ слов
 - В конце обязательно добавь раздел "Заключение"
 - Статья должна быть полностью завершенной
 `
@@ -128,88 +163,91 @@ async function generateArticle(topic) {
       { role: "assistant", content: article },
       {
         role: "user",
-        content: "Продолжи статью с места обрыва. Не повторяй текст. Обязательно заверши статью разделом 'Заключение'."
+        content: "Продолжи статью с места обрыва. Не повторяй текст. Обязательно добавь полноценный раздел 'Заключение'."
       }
     ];
 
     attempts++;
   }
 
-  if (!isComplete(article)) {
-    throw new Error("Статья не завершена корректно");
-  }
-
-  return article;
+  throw new Error("Article generation incomplete");
 }
 
-/* -------------------------------------------------- */
-/* СОЗДАНИЕ ПОСТА */
-/* -------------------------------------------------- */
+/* ============================================================
+   POST CREATION
+============================================================ */
 
 async function createPost(topic) {
-  const title = topic.trim();
-  const slug = transliterate(title);
+  const cleanTitle = topic.trim();
+  const slug = transliterate(cleanTitle);
   const date = new Date().toISOString().split("T")[0];
 
-  if (!fs.existsSync(POSTS_DIR)) {
-    fs.mkdirSync(POSTS_DIR, { recursive: true });
+  await ensureDir(POSTS_DIR);
+
+  if (await slugExists(slug)) {
+    log.warn(`Slug already exists: ${slug}`);
+    return false;
   }
 
-  const filename = `${slug}-${date}.md`;
-  const filepath = path.join(POSTS_DIR, filename);
-
-  if (fs.existsSync(filepath)) {
-    console.log("⚠ Уже существует:", filename);
-    return;
+  if (await titleExists(cleanTitle)) {
+    log.warn(`Title already exists: ${cleanTitle}`);
+    return false;
   }
 
-  console.log("📝 Генерируем статью...");
-  const article = await generateArticle(title);
+  log.info("Generating article...");
+  const article = await generateArticle(cleanTitle);
 
   const frontmatter = `---
-title: "${title}"
-description: "${title}"
+title: "${cleanTitle}"
+description: "${cleanTitle}"
 pubDate: "${date}"
 author: "Butler SEO Bot"
 ---
 `;
 
-  fs.writeFileSync(filepath, frontmatter + "\n" + article, "utf-8");
+  const filename = `${slug}-${date}.md`;
+  const filepath = path.join(POSTS_DIR, filename);
 
-  console.log("✅ Создано:", filename);
+  await fs.writeFile(filepath, frontmatter + "\n" + article, "utf-8");
+
+  log.success(`Created: ${filename}`);
+  return true;
 }
 
-/* -------------------------------------------------- */
-/* ЗАПУСК */
-/* -------------------------------------------------- */
+/* ============================================================
+   MAIN ENGINE
+============================================================ */
 
-(async function run() {
-  try {
-    let topics = readList(TOPICS_FILE);
+async function runFactory() {
+  const topics = await readLines(TOPICS_FILE);
+  const queue = await readLines(QUEUE_FILE);
 
-    if (topics.length > 0) {
-      const topic = topics.shift();
-      await createPost(topic);
-      writeList(TOPICS_FILE, topics);
-      return;
-    }
+  let topic = null;
 
-    let queue = readList(QUEUE_FILE);
-
-    if (queue.length === 0) {
-      console.log("📭 Очередь пуста");
-      return;
-    }
-
-    const next = queue.shift();
-    writeList(TOPICS_FILE, [next]);
-    writeList(QUEUE_FILE, queue);
-
-    await createPost(next);
-
-  } catch (err) {
-    console.error("❌ Factory аварийно завершён:", err.message);
-    process.exit(1);
+  if (topics.length > 0) {
+    topic = topics.shift();
+    await writeLines(TOPICS_FILE, topics);
+  } else if (queue.length > 0) {
+    topic = queue.shift();
+    await writeLines(QUEUE_FILE, queue);
+  } else {
+    log.info("Queue empty");
+    return;
   }
-})();
 
+  const created = await createPost(topic);
+
+  if (!created) {
+    log.warn("Skipping duplicate. Trying next topic...");
+    await runFactory();
+  }
+}
+
+/* ============================================================
+   EXECUTION
+============================================================ */
+
+runFactory().catch(err => {
+  log.error(err.message);
+  process.exit(1);
+});
