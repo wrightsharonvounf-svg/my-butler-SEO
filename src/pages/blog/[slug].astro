@@ -12,11 +12,26 @@ export async function getStaticPaths() {
 }
 
 const { post } = Astro.props;
+
+const allPosts = await getCollection('posts');
+
+// сортировка по дате
+const sortedPosts = allPosts.sort(
+  (a, b) => new Date(b.data.pubDate) - new Date(a.data.pubDate)
+);
+
+// индекс текущей статьи
+const currentIndex = sortedPosts.findIndex(p => p.slug === post.slug);
+
+const prevPost = sortedPosts[currentIndex + 1] || null;
+const nextPost = sortedPosts[currentIndex - 1] || null;
+
 const { Content } = await post.render();
 ---
 
-<PostLayout content={post.data}>
+<PostLayout content={post.data} prevPost={prevPost} nextPost={nextPost}>
   <article>
     <Content />
   </article>
 </PostLayout>
+
