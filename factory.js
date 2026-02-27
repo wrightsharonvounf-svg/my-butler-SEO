@@ -1,5 +1,3 @@
-// FACTORY 6.1 — CONTENT QUALITY ENGINE
-
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
@@ -7,141 +5,96 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const POSTS_DIR = "./src/content/posts";
+const TOPICS_FILE = "./topics.txt";
+const QUEUE_FILE = "./topics-queue.txt";
 
 if (!process.env.DEEPSEEK_API_KEY) {
   console.error("❌ Нет DEEPSEEK_API_KEY");
   process.exit(1);
 }
 
-/* ------------------ API ------------------ */
+/* ---------------- utils ---------------- */
 
-async function callAI(messages, maxTokens = 1800) {
+const ensureFile = (file) => {
+  if (!fs.existsSync(file)) fs.writeFileSync(file, "");
+};
+
+const readList = (file) => {
+  ensureFile(file);
+  return fs.readFileSync(file, "utf-8")
+    .split("\n")
+    .map(t => t.trim())
+    .filter(Boolean);
+};
+
+const writeList = (file, list) => {
+  fs.writeFileSync(file, list.join("\n"));
+};
+
+const transliterate = (text) =>
+  text.toLowerCase()
+    .replace(/[^a-zа-я0-9\s]/gi, "")
+    .replace(/\s+/g, "-");
+
+/* ---------------- AI ---------------- */
+
+async function callAI(prompt) {
   const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`
+      Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
     },
     body: JSON.stringify({
       model: "deepseek-chat",
-      messages,
-      temperature: 0.7,
-      max_tokens: maxTokens
-    })
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 1800,
+    }),
   });
 
   const data = await res.json();
 
-  if (!res.ok) throw new Error("DeepSeek error");
+  if (!res.ok) throw new Error("AI error");
 
   return data.choices[0].message.content.trim();
 }
 
-/* ------------------ UTILS ------------------ */
-
-function slugify(text) {
-  return text
-    .toLowerCase()
-    .replace(/[^a-zа-я0-9\s]/gi, "")
-    .replace(/\s+/g, "-");
-}
-
-function cleanMarkdown(text) {
-  return text
-    .replace(/\*\*/g, "")
-    .replace(/^#+\s/gm, "")
-    .replace(/\n{3,}/g, "\n\n");
-}
-
-function isSEOValid(text) {
-  return (
-    text.length > 1500 &&
-    text.includes("##") &&
-    /заключение/i.test(text)
-  );
-}
-
-/* ------------------ GENERATE ARTICLE ------------------ */
+/* ---------------- article ---------------- */
 
 async function generateArticle(topic) {
-  const messages = [
-    {
-      role: "user",
-      content: `
-Напиши экспертную SEO-статью на тему: "${topic}"
+  console.log("🧠 Генерация статьи:", topic);
 
-Требования:
-- 1500+ слов
-- H2 подзаголовки
-- без H1
-- уникальный текст
-- в конце Заключение
-`
-    }
-  ];
+  return await callAI(`
+Напиши SEO статью 1500+ слов.
 
-  return await callAI(messages, 2000);
+Тема: ${topic}
+
+Без H1.
+С подзаголовками H2.
+С заключением.
+Полностью законченный текст.
+`);
 }
 
-/* ------------------ QUALITY CHECK ------------------ */
-
-async function checkQuality(article) {
-  const messages = [
-    {
-      role: "user",
-      content: `
-Проверь качество статьи.
-
-Ответь только:
-
-OK
-
-или
-
-REWRITE
-
-Статья:
-
-${article}
-`
-    }
-  ];
-
-  const result = await callAI(messages, 300);
-  return result.includes("OK");
-}
-
-/* ------------------ CREATE POST ------------------ */
+/* ---------------- create post ---------------- */
 
 async function createPost(topic) {
-  const slug = slugify(topic);
+  const slug = transliterate(topic);
   const date = new Date().toISOString().split("T")[0];
 
-  const filename = `${slug}-${date}.md`;
-  const filepath = path.join(POSTS_DIR, filename);
+  const fileName = `${slug}-${date}.md`;
+  const filePath = path.join(POSTS_DIR, fileName);
 
-  if (fs.existsSync(filepath)) {
-    console.log("⚠ дубль — пропуск");
+  if (fs.existsSync(filePath)) {
+    console.log("⚠ Дубль:", fileName);
     return;
   }
 
-  console.log("🧠 Генерация...");
-  let article = await generateArticle(topic);
-
-  article = cleanMarkdown(article);
-
-  if (!isSEOValid(article)) {
-    console.log("♻ SEO check fail → retry");
-    article = cleanMarkdown(await generateArticle(topic));
+  if (!fs.existsSync(POSTS_DIR)) {
+    fs.mkdirSync(POSTS_DIR, { recursive: true });
   }
 
-  console.log("🔍 Проверка качества...");
-  const isGood = await checkQuality(article);
-
-  if (!isGood) {
-    console.log("♻ QC fail → retry");
-    article = cleanMarkdown(await generateArticle(topic));
-  }
+  const content = await generateArticle(topic);
 
   const frontmatter = `---
 title: "${topic}"
@@ -149,20 +102,52 @@ description: "${topic}"
 pubDate: "${date}"
 author: "Butler SEO Bot"
 ---
+
 `;
 
-  fs.writeFileSync(filepath, frontmatter + article);
+  fs.writeFileSync(filePath, frontmatter + content);
 
-  console.log("✅ Готово:", filename);
+  console.log("✅ Создано:", fileName);
 }
 
-/* ------------------ RUN ------------------ */
+/* ---------------- topic logic ---------------- */
 
-const topic = process.argv[2];
+function getNextTopic() {
+  let topics = readList(TOPICS_FILE);
 
-if (!topic) {
-  console.log("⚠ Передай тему");
-  process.exit();
+  if (topics.length > 0) {
+    const topic = topics.shift();
+    writeList(TOPICS_FILE, topics);
+    return topic;
+  }
+
+  let queue = readList(QUEUE_FILE);
+
+  if (queue.length === 0) return null;
+
+  const topic = queue.shift();
+  writeList(QUEUE_FILE, queue);
+
+  return topic;
 }
 
-createPost(topic);
+/* ---------------- run ---------------- */
+
+(async () => {
+  try {
+    const topic = getNextTopic();
+
+    if (!topic) {
+      console.log("📭 Нет тем");
+      return;
+    }
+
+    console.log("🚀 Тема:", topic);
+
+    await createPost(topic);
+
+  } catch (e) {
+    console.error("❌ Ошибка factory:", e.message);
+    process.exit(1);
+  }
+})();
