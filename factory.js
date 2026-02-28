@@ -1,137 +1,206 @@
+// FACTORY 6.2 — CONTENT COMPLETION GUARD
+
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 
 dotenv.config();
 
+/* -------------------------------------------------- */
+/* CONFIG */
+/* -------------------------------------------------- */
+
 const POSTS_DIR = "./src/content/posts";
 const TOPICS_FILE = "./topics.txt";
 const QUEUE_FILE = "./topics-queue.txt";
+
+const MIN_LENGTH = 1800;
+const MAX_ATTEMPTS = 6;
 
 if (!process.env.DEEPSEEK_API_KEY) {
   console.error("❌ Нет DEEPSEEK_API_KEY");
   process.exit(1);
 }
 
-/* ---------------- utils ---------------- */
+/* -------------------------------------------------- */
+/* UTILS */
+/* -------------------------------------------------- */
 
-const ensureFile = (file) => {
-  if (!fs.existsSync(file)) fs.writeFileSync(file, "");
-};
-
-const readList = (file) => {
-  ensureFile(file);
-  return fs.readFileSync(file, "utf-8")
-    .split("\n")
-    .map(t => t.trim())
-    .filter(Boolean);
-};
-
-const writeList = (file, list) => {
-  fs.writeFileSync(file, list.join("\n"));
-};
-
-const transliterate = (text) =>
-  text.toLowerCase()
+const transliterate = text =>
+  text
+    .toLowerCase()
     .replace(/[^a-zа-я0-9\s]/gi, "")
     .replace(/\s+/g, "-");
 
-/* ---------------- AI ---------------- */
+const readLines = file =>
+  fs.existsSync(file)
+    ? fs.readFileSync(file, "utf-8").split("\n").map(t => t.trim()).filter(Boolean)
+    : [];
 
-async function callAI(prompt) {
+const writeLines = (file, arr) =>
+  fs.writeFileSync(file, arr.join("\n"));
+
+const existingSlugs = () => {
+  if (!fs.existsSync(POSTS_DIR)) return [];
+  return fs.readdirSync(POSTS_DIR).map(f => f.split(".md")[0]);
+};
+
+/* -------------------------------------------------- */
+/* API */
+/* -------------------------------------------------- */
+
+async function callDeepSeek(messages, max_tokens = 2000) {
   const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+      Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`
     },
     body: JSON.stringify({
       model: "deepseek-chat",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 1800,
-    }),
+      messages,
+      temperature: 0.7,
+      max_tokens
+    })
   });
 
   const data = await res.json();
 
-  if (!res.ok) throw new Error("AI error");
+  if (!res.ok) throw new Error(data.error?.message || "DeepSeek API error");
 
   return data.choices[0].message.content.trim();
 }
 
-/* ---------------- article ---------------- */
+/* -------------------------------------------------- */
+/* COMPLETION CHECK */
+/* -------------------------------------------------- */
 
-async function generateArticle(topic) {
-  console.log("🧠 Генерация статьи:", topic);
+function isComplete(text) {
+  const t = text.trim();
 
-  return await callAI(`
-Напиши SEO статью 1500+ слов.
+  if (t.length < MIN_LENGTH) return false;
 
-Тема: ${topic}
+  if (!/[.!?]$/.test(t)) return false;
 
-Без H1.
-С подзаголовками H2.
-С заключением.
-Полностью законченный текст.
-`);
+  if (!t.toLowerCase().includes("заключение") &&
+      !t.toLowerCase().includes("вывод"))
+    return false;
+
+  return true;
 }
 
-/* ---------------- create post ---------------- */
+/* -------------------------------------------------- */
+/* ARTICLE GENERATION */
+/* -------------------------------------------------- */
+
+async function generateArticle(topic) {
+  let article = "";
+  let attempt = 0;
+
+  let messages = [
+    {
+      role: "user",
+      content: `
+Напиши SEO-статью на тему: "${topic}"
+
+Требования:
+- 1800+ слов
+- Только H2
+- Без H1
+- Глубокая экспертность
+- В конце раздел "Заключение"
+`
+    }
+  ];
+
+  while (attempt < MAX_ATTEMPTS) {
+    const part = await callDeepSeek(messages);
+
+    article += "\n\n" + part;
+
+    if (isComplete(article)) return article;
+
+    messages = [
+      { role: "assistant", content: article },
+      {
+        role: "user",
+        content: "Продолжи статью с места обрыва. Не повторяй текст. Заверши её."
+      }
+    ];
+
+    attempt++;
+  }
+
+  throw new Error("❌ Статья не завершена после всех попыток");
+}
+
+/* -------------------------------------------------- */
+/* POST CREATION */
+/* -------------------------------------------------- */
 
 async function createPost(topic) {
-  const slug = transliterate(topic);
+  const title = topic.trim();
+  const slugBase = transliterate(title);
   const date = new Date().toISOString().split("T")[0];
 
-  const fileName = `${slug}-${date}.md`;
-  const filePath = path.join(POSTS_DIR, fileName);
+  const slug = `${slugBase}-${date}`;
+  const filePath = path.join(POSTS_DIR, `${slug}.md`);
 
-  if (fs.existsSync(filePath)) {
-    console.log("⚠ Дубль:", fileName);
-    return;
+  const duplicates = existingSlugs();
+
+  if (duplicates.includes(slug)) {
+    console.log("⚠ Дубль — пропуск:", slug);
+    return false;
   }
 
-  if (!fs.existsSync(POSTS_DIR)) {
-    fs.mkdirSync(POSTS_DIR, { recursive: true });
-  }
+  console.log("📝 Генерация:", title);
 
-  const content = await generateArticle(topic);
+  const article = await generateArticle(title);
 
   const frontmatter = `---
-title: "${topic}"
-description: "${topic}"
+title: "${title}"
+description: "${title}"
 pubDate: "${date}"
 author: "Butler SEO Bot"
 ---
-
 `;
 
-  fs.writeFileSync(filePath, frontmatter + content);
+  fs.mkdirSync(POSTS_DIR, { recursive: true });
 
-  console.log("✅ Создано:", fileName);
+  fs.writeFileSync(filePath, frontmatter + "\n" + article);
+
+  console.log("✅ Готово:", slug);
+
+  return true;
 }
 
-/* ---------------- topic logic ---------------- */
+/* -------------------------------------------------- */
+/* TOPIC ENGINE */
+/* -------------------------------------------------- */
 
 function getNextTopic() {
-  let topics = readList(TOPICS_FILE);
+  let topics = readLines(TOPICS_FILE);
 
   if (topics.length > 0) {
-    const topic = topics.shift();
-    writeList(TOPICS_FILE, topics);
-    return topic;
+    const t = topics.shift();
+    writeLines(TOPICS_FILE, topics);
+    return t;
   }
 
-  let queue = readList(QUEUE_FILE);
+  let queue = readLines(QUEUE_FILE);
 
   if (queue.length === 0) return null;
 
-  const topic = queue.shift();
-  writeList(QUEUE_FILE, queue);
+  const next = queue.shift();
 
-  return topic;
+  writeLines(QUEUE_FILE, queue);
+
+  return next;
 }
 
-/* ---------------- run ---------------- */
+/* -------------------------------------------------- */
+/* RUN */
+/* -------------------------------------------------- */
 
 (async () => {
   try {
@@ -142,12 +211,14 @@ function getNextTopic() {
       return;
     }
 
-    console.log("🚀 Тема:", topic);
+    const created = await createPost(topic);
 
-    await createPost(topic);
-
+    if (!created) {
+      console.log("➡ Берём следующую тему...");
+      return await run();
+    }
   } catch (e) {
-    console.error("❌ Ошибка factory:", e.message);
+    console.error("❌ Factory crash:", e.message);
     process.exit(1);
   }
 })();
