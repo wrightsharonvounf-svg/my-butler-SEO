@@ -4,8 +4,8 @@ const posts = defineCollection({
   schema: z.object({
     title: z.string(),
     description: z.string(),
-    pubDate: z.date(),
-    updatedDate: z.date().optional(),
+    pubDate: z.coerce.date(),
+    updatedDate: z.coerce.date().optional(),
     tags: z.array(z.string()).optional(),
 
     // Для FAQ schema
