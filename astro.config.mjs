@@ -1,26 +1,30 @@
-// Файл: astro.config.mjs (Правильная версия)
+// Файл: astro.config.mjs
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
+import rehypeSlug from 'rehype-slug';
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 
-// https://astro.build/config
 export default defineConfig({
   site: 'https://www.butler-tim.ru',
   integrations: [sitemap()],
   output: 'static',
-  
+
+  // Для автогенерации anchor + TOC
+  markdown: {
+    rehypePlugins: [
+      rehypeSlug,
+      [rehypeAutolinkHeadings, { behavior: 'wrap' }]
+    ]
+  },
+
   vite: {
     ssr: {
-      // Эта строка нужна для корректной работы rss.xml.js
       external: ["sanitize-html"],
-      // Оптимизация для статической генерации
       noExternal: ['@astrojs/*']
     },
-    
-    // НОВЫЕ НАСТРОЙКИ ДЛЯ РЕШЕНИЯ ПРОБЛЕМЫ ПАМЯТИ
+
     build: {
-      // Отключаем sourcemaps в продакшене для экономии памяти
       sourcemap: false,
-      // Оптимизация чанков
       rollupOptions: {
         output: {
           manualChunks: undefined,
@@ -30,18 +34,13 @@ export default defineConfig({
           assetFileNames: 'assets/[name]-[hash].[ext]'
         }
       },
-      // Увеличиваем лимит для больших чанков
       chunkSizeWarningLimit: 2000,
-      // Минификация только в продакшене
       minify: process.env.NODE_ENV === 'production' ? 'esbuild' : false,
-      // Оптимизация ассетов
-      assetsInlineLimit: 0, // Отключаем инлайн ассетов для экономии памяти
+      assetsInlineLimit: 0,
     },
-    
-    // Увеличиваем лимиты для обработки файлов
+
     server: {
       fs: {
-        // Позволяем читать файлы из проекта
         allow: ['..']
       }
     }

@@ -6,7 +6,9 @@ export async function getStaticPaths() {
   const posts = await getCollection('posts');
 
   return posts.map(post => ({
-    params: { slug: post.slug },
+    params: { 
+      slug: post.slug.replace(/-\d{4}-\d{2}-\d{2}$/, '') 
+    },
     props: { post },
   }));
 }
@@ -20,18 +22,112 @@ const sortedPosts = allPosts.sort(
   (a, b) => new Date(b.data.pubDate) - new Date(a.data.pubDate)
 );
 
-// индекс текущей статьи
 const currentIndex = sortedPosts.findIndex(p => p.slug === post.slug);
 
 const prevPost = sortedPosts[currentIndex + 1] || null;
 const nextPost = sortedPosts[currentIndex - 1] || null;
 
-const { Content } = await post.render();
+// Похожие статьи (по тегам)
+const relatedPosts = allPosts
+  .filter(p =>
+    p.slug !== post.slug &&
+    p.data.tags?.some(tag => post.data.tags?.includes(tag))
+  )
+  .slice(0, 3);
+
+const { Content, headings } = await post.render();
+
+const cleanSlug = post.slug.replace(/-\d{4}-\d{2}-\d{2}$/, '');
+const canonicalUrl = `https://www.butler-tim.ru/blog/${cleanSlug}/`;
 ---
 
-<PostLayout content={post.data} prevPost={prevPost} nextPost={nextPost}>
-  <article>
-    <Content />
-  </article>
-</PostLayout>
+<PostLayout 
+  content={post.data} 
+  prevPost={prevPost} 
+  nextPost={nextPost}
+>
 
+  {/* Breadcrumb schema */}
+  <script type="application/ld+json">
+  {JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Главная",
+        "item": "https://www.butler-tim.ru/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Блог",
+        "item": "https://www.butler-tim.ru/blog/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": post.data.title
+      }
+    ]
+  })}
+  </script>
+
+  {/* FAQ schema */}
+  {post.data.faq && (
+    <script type="application/ld+json">
+    {JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": post.data.faq.map(item => ({
+        "@type": "Question",
+        "name": item.question,
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": item.answer
+        }
+      }))
+    })}
+    </script>
+  )}
+
+  <article>
+
+    {/* Оглавление */}
+    {headings.length > 0 && (
+      <aside class="toc">
+        <h3>Содержание</h3>
+        <ul>
+          {headings
+            .filter(h => h.depth <= 3)
+            .map(h => (
+              <li class={`depth-${h.depth}`}>
+                <a href={`#${h.slug}`}>{h.text}</a>
+              </li>
+          ))}
+        </ul>
+      </aside>
+    )}
+
+    <Content />
+
+    {/* Похожие статьи */}
+    {relatedPosts.length > 0 && (
+      <section class="related-posts">
+        <h2>Похожие статьи</h2>
+        <ul>
+          {relatedPosts.map(p => (
+            <li>
+              <a href={`/blog/${p.slug.replace(/-\d{4}-\d{2}-\d{2}$/, '')}/`}>
+                {p.data.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+  </article>
+
+</PostLayout>
