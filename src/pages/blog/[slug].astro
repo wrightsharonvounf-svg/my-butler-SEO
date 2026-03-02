@@ -10,24 +10,15 @@ export async function getStaticPaths() {
     const originalSlug = post.slug;
     const cleanSlug = originalSlug.replace(/-\d{4}-\d{2}-\d{2}$/, '');
 
-    // Новая версия (без даты)
     paths.push({
       params: { slug: cleanSlug },
-      props: {
-        post,
-        isRedirect: false,
-      },
+      props: { post, isRedirect: false }
     });
 
-    // Старая версия (с датой) — создаём redirect страницу
     if (originalSlug !== cleanSlug) {
       paths.push({
         params: { slug: originalSlug },
-        props: {
-          post,
-          isRedirect: true,
-          cleanSlug,
-        },
+        props: { post, isRedirect: true, cleanSlug }
       });
     }
   }
@@ -37,30 +28,139 @@ export async function getStaticPaths() {
 
 const { post, isRedirect, cleanSlug } = Astro.props;
 
-// Если это redirect — контент не рендерим
 let Content = null;
+let headings = [];
+let relatedPosts = [];
+
 if (!isRedirect) {
   const rendered = await post.render();
   Content = rendered.Content;
+  headings = rendered.headings;
+
+  const allPosts = await getCollection('posts');
+
+  relatedPosts = allPosts
+    .filter(p =>
+      p.slug !== post.slug &&
+      p.data.tags?.some(tag => post.data.tags?.includes(tag))
+    )
+    .slice(0, 3);
 }
 ---
 
 {isRedirect ? (
   <html lang="ru">
     <head>
-      <meta charset="UTF-8" />
       <meta http-equiv="refresh" content={`0; url=/blog/${cleanSlug}/`} />
       <link rel="canonical" href={`/blog/${cleanSlug}/`} />
-      <title>Перенаправление...</title>
     </head>
     <body>
-      <p>Страница переехала. <a href={`/blog/${cleanSlug}/`}>Перейти</a></p>
+      <a href={`/blog/${cleanSlug}/`}>Перейти</a>
     </body>
   </html>
 ) : (
   <PostLayout content={post.data}>
+    {/* Breadcrumb schema */}
+    <script type="application/ld+json">
+    {JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Главная",
+          "item": "https://www.butler-tim.ru/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Блог",
+          "item": "https://www.butler-tim.ru/blog/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": post.data.title
+        }
+      ]
+    })}
+    </script>
+
+    {/* FAQ schema */}
+    {post.data.faq && (
+      <script type="application/ld+json">
+      {JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": post.data.faq.map(item => ({
+          "@type": "Question",
+          "name": item.question,
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": item.answer
+          }
+        }))
+      })}
+      </script>
+    )}
+
     <article>
+
+      {/* Breadcrumb UI */}
+      <nav>
+        <a href="/">Главная</a> → 
+        <a href="/blog/">Блог</a> → 
+        <span>{post.data.title}</span>
+      </nav>
+
+      {/* Авто-оглавление */}
+      {headings.length > 0 && (
+        <aside>
+          <h3>Содержание</h3>
+          <ul>
+            {headings
+              .filter(h => h.depth <= 3)
+              .map(h => (
+                <li>
+                  <a href={`#${h.slug}`}>{h.text}</a>
+                </li>
+            ))}
+          </ul>
+        </aside>
+      )}
+
       <Content />
+
+      {/* FAQ блок */}
+      {post.data.faq && (
+        <section>
+          <h2>Частые вопросы</h2>
+          {post.data.faq.map(item => (
+            <div>
+              <h3>{item.question}</h3>
+              <p>{item.answer}</p>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* Похожие статьи */}
+      {relatedPosts.length > 0 && (
+        <section>
+          <h2>Похожие статьи</h2>
+          <ul>
+            {relatedPosts.map(p => (
+              <li>
+                <a href={`/blog/${p.slug.replace(/-\d{4}-\d{2}-\d{2}$/, '')}/`}>
+                  {p.data.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
     </article>
   </PostLayout>
 )}
