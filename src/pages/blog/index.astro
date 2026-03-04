@@ -1,5 +1,5 @@
 ---
-import Layout from '../../layouts/Layout.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 
 const posts = await getCollection('posts');
@@ -10,7 +10,7 @@ posts.sort((a, b) =>
 );
 ---
 
-<Layout
+<BaseLayout
   title="Блог о недвижимости и финансах"
   description="Информационный блог об аренде, ипотеке, налогах и инвестициях."
 >
@@ -27,4 +27,4 @@ posts.sort((a, b) =>
       ))}
     </ul>
   </section>
-</Layout>
+</BaseLayout>
