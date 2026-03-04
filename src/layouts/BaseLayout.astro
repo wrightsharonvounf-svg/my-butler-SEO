@@ -1,0 +1,13 @@
+---
+import SEO from '../components/SEO.astro';
+const { seo } = Astro.props;
+---
+
+<html lang="ru">
+  <head>
+    <SEO {...seo} />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

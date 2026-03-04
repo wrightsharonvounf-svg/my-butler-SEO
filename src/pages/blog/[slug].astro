@@ -1,5 +1,6 @@
 ---
-import PostLayout from '../../layouts/PostLayout.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import { getCollection } from 'astro:content';
 
 export async function getStaticPaths() {
@@ -10,11 +11,13 @@ export async function getStaticPaths() {
     const originalSlug = post.slug;
     const cleanSlug = originalSlug.replace(/-\d{4}-\d{2}-\d{2}$/, '');
 
+    // Новый URL
     paths.push({
       params: { slug: cleanSlug },
-      props: { post, isRedirect: false }
+      props: { post, isRedirect: false, cleanSlug }
     });
 
+    // Старый URL → redirect
     if (originalSlug !== cleanSlug) {
       paths.push({
         params: { slug: originalSlug },
@@ -44,77 +47,51 @@ if (!isRedirect) {
       p.slug !== post.slug &&
       p.data.tags?.some(tag => post.data.tags?.includes(tag))
     )
-    .slice(0, 3);
+    .slice(0, 4);
 }
+
+const canonical = `https://www.butler-tim.ru/blog/${cleanSlug}/`;
 ---
 
 {isRedirect ? (
   <html lang="ru">
     <head>
-      <meta http-equiv="refresh" content={`0; url=/blog/${cleanSlug}/`} />
-      <link rel="canonical" href={`/blog/${cleanSlug}/`} />
+      <meta http-equiv="refresh" content={`0; url=${canonical}`} />
+      <link rel="canonical" href={canonical} />
     </head>
     <body>
-      <a href={`/blog/${cleanSlug}/`}>Перейти</a>
+      <a href={canonical}>Перейти</a>
     </body>
   </html>
 ) : (
-  <PostLayout content={post.data}>
-    {/* Breadcrumb schema */}
-    <script type="application/ld+json">
-    {JSON.stringify({
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      "itemListElement": [
-        {
-          "@type": "ListItem",
-          "position": 1,
-          "name": "Главная",
-          "item": "https://www.butler-tim.ru/"
-        },
-        {
-          "@type": "ListItem",
-          "position": 2,
-          "name": "Блог",
-          "item": "https://www.butler-tim.ru/blog/"
-        },
-        {
-          "@type": "ListItem",
-          "position": 3,
-          "name": post.data.title
-        }
-      ]
-    })}
-    </script>
+  <BaseLayout seo={{
+    title: post.data.title,
+    description: post.data.description,
+    canonical,
+    publishedTime: post.data.pubDate,
+    modifiedTime: post.data.updatedDate
+  }}>
 
-    {/* FAQ schema */}
-    {post.data.faq && (
-      <script type="application/ld+json">
-      {JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": post.data.faq.map(item => ({
-          "@type": "Question",
-          "name": item.question,
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": item.answer
-          }
-        }))
-      })}
-      </script>
-    )}
+    <Breadcrumbs title={post.data.title} />
 
     <article>
 
-      {/* Breadcrumb UI */}
-      <nav>
-        <a href="/">Главная</a> → 
-        <a href="/blog/">Блог</a> → 
-        <span>{post.data.title}</span>
-      </nav>
+      {/* Article Schema */}
+      <script type="application/ld+json">
+      {JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": post.data.title,
+        "datePublished": post.data.pubDate,
+        "dateModified": post.data.updatedDate || post.data.pubDate,
+        "author": {
+          "@type": "Organization",
+          "name": "Butler Tim"
+        }
+      })}
+      </script>
 
-      {/* Авто-оглавление */}
+      {/* Оглавление */}
       {headings.length > 0 && (
         <aside>
           <h3>Содержание</h3>
@@ -132,17 +109,34 @@ if (!isRedirect) {
 
       <Content />
 
-      {/* FAQ блок */}
+      {/* FAQ */}
       {post.data.faq && (
-        <section>
-          <h2>Частые вопросы</h2>
-          {post.data.faq.map(item => (
-            <div>
-              <h3>{item.question}</h3>
-              <p>{item.answer}</p>
-            </div>
-          ))}
-        </section>
+        <>
+          <section>
+            <h2>Частые вопросы</h2>
+            {post.data.faq.map(item => (
+              <div>
+                <h3>{item.question}</h3>
+                <p>{item.answer}</p>
+              </div>
+            ))}
+          </section>
+
+          <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": post.data.faq.map(item => ({
+              "@type": "Question",
+              "name": item.question,
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": item.answer
+              }
+            }))
+          })}
+          </script>
+        </>
       )}
 
       {/* Похожие статьи */}
@@ -162,5 +156,6 @@ if (!isRedirect) {
       )}
 
     </article>
-  </PostLayout>
+
+  </BaseLayout>
 )}

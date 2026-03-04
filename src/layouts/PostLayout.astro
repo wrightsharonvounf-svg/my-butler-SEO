@@ -1,104 +1,174 @@
 ---
 import Layout from './Layout.astro';
+
 const { content, prevPost, nextPost } = Astro.props;
 
+const canonical = `https://www.butler-tim.ru/blog/${content.slug}/`;
 ---
 
 <Layout 
   title={content.title} 
   description={content.description}
+  canonical={canonical}
   schema={{
     "@context": "https://schema.org",
     "@type": "Article",
     "headline": content.title,
     "datePublished": content.pubDate,
+    "dateModified": content.updatedDate || content.pubDate,
     "author": {
       "@type": "Person",
-      "name": content.author || "ButlerSPB"
+      "name": content.author || "Butler Tim"
     }
   }}
 >
 
-<nav style="font-size: 0.9rem; margin-bottom: 1rem;">
+<nav style="font-size:0.9rem;margin-bottom:1rem;">
   <a href="/">Главная</a> →
   <a href="/blog/">Блог</a> →
   <span>{content.title}</span>
 </nav>
 
+{/* Breadcrumb Schema */}
+<script type="application/ld+json">
+{JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Главная",
+      "item": "https://www.butler-tim.ru/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Блог",
+      "item": "https://www.butler-tim.ru/blog/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": content.title
+    }
+  ]
+})}
+</script>
+
 <article class="max-w-4xl mx-auto p-6">
 
-  <header class="mb-8">
-    <h1>{content.title}</h1>
-    <p style="color:#666;">
-      <time datetime={content.pubDate}>
-        {new Date(content.pubDate).toLocaleDateString('ru-RU')}
-      </time>
-      {content.author && ` • Автор: ${content.author}`}
-    </p>
-  </header>
+<header class="mb-8">
 
-  <section>
-    <slot />
-  </section>
+<h1>{content.title}</h1>
 
-  {content.faq && content.faq.length > 0 && (
-    <section style="margin-top:3rem;padding-top:2rem;border-top:1px solid #eee;">
-      <h2>Часто задаваемые вопросы</h2>
+<p style="color:#666;">
+<time datetime={content.pubDate}>
+{new Date(content.pubDate).toLocaleDateString('ru-RU')}
+</time>
 
-      {content.faq.map(item => (
-        <div style="margin-bottom:1.5rem;">
-          <h3>{item.question}</h3>
-          <p>{item.answer}</p>
-        </div>
-      ))}
-    </section>
-  )}
+{content.author && ` • Автор: ${content.author}`}
+</p>
 
-  {content.faq && content.faq.length > 0 && (
-    <script type="application/ld+json">
-      {JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": content.faq.map(item => ({
-          "@type": "Question",
-          "name": item.question,
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": item.answer
-          }
-        }))
-      })}
-    </script>
-  )}
+</header>
 
- {(prevPost || nextPost) && (
-  <nav style="margin-top:3rem;padding-top:2rem;border-top:1px solid #eee;display:flex;justify-content:space-between;gap:1rem;">
-    
-    <div>
-      {prevPost && (
-        <a href={`/blog/${prevPost.slug}/`}>
-          ← {prevPost.data.title}
-        </a>
-      )}
-    </div>
+<section>
+<slot />
+</section>
 
-    <div style="text-align:right;">
-      {nextPost && (
-        <a href={`/blog/${nextPost.slug}/`}>
-          {nextPost.data.title} →
-        </a>
-      )}
-    </div>
+{/* FAQ */}
+{content.faq && content.faq.length > 0 && (
 
-  </nav>
+<section style="margin-top:3rem;padding-top:2rem;border-top:1px solid #eee;">
+
+<h2>Часто задаваемые вопросы</h2>
+
+{content.faq.map(item => (
+
+<div style="margin-bottom:1.5rem;">
+<h3>{item.question}</h3>
+<p>{item.answer}</p>
+</div>
+
+))}
+
+</section>
+
 )}
 
+{/* FAQ Schema */}
+{content.faq && content.faq.length > 0 && (
 
-  <footer style="margin-top:3rem;padding-top:1rem;border-top:1px solid #eee;">
-    © {new Date().getFullYear()} Butler Tim
-  </footer>
+<script type="application/ld+json">
+
+{JSON.stringify({
+
+"@context": "https://schema.org",
+
+"@type": "FAQPage",
+
+"mainEntity": content.faq.map(item => ({
+
+"@type": "Question",
+
+"name": item.question,
+
+"acceptedAnswer": {
+
+"@type": "Answer",
+
+"text": item.answer
+
+}
+
+}))
+
+})}
+
+</script>
+
+)}
+
+{/* Навигация по статьям */}
+
+{(prevPost || nextPost) && (
+
+<nav style="margin-top:3rem;padding-top:2rem;border-top:1px solid #eee;display:flex;justify-content:space-between;gap:1rem;">
+
+<div>
+
+{prevPost && (
+
+<a href={`/blog/${prevPost.slug.replace(/-\d{4}-\d{2}-\d{2}$/,'')}/`}>
+← {prevPost.data.title}
+</a>
+
+)}
+
+</div>
+
+<div style="text-align:right;">
+
+{nextPost && (
+
+<a href={`/blog/${nextPost.slug.replace(/-\d{4}-\d{2}-\d{2}$/,'')}/`}>
+{nextPost.data.title} →
+</a>
+
+)}
+
+</div>
+
+</nav>
+
+)}
+
+<footer style="margin-top:3rem;padding-top:1rem;border-top:1px solid #eee;">
+
+© {new Date().getFullYear()} Butler Tim
+
+</footer>
 
 </article>
 
 </Layout>
-
