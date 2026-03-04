@@ -1,13 +1,38 @@
 ---
 import SEO from '../components/SEO.astro';
-const { seo } = Astro.props;
+
+const {
+  title,
+  description,
+  canonical,
+  publishedTime,
+  modifiedTime,
+  schema
+} = Astro.props;
 ---
 
 <html lang="ru">
-  <head>
-    <SEO {...seo} />
-  </head>
-  <body>
-    <slot />
-  </body>
+<head>
+
+<SEO
+title={title}
+description={description}
+canonical={canonical}
+publishedTime={publishedTime}
+modifiedTime={modifiedTime}
+/>
+
+{schema && (
+<script type="application/ld+json">
+{JSON.stringify(schema)}
+</script>
+)}
+
+</head>
+
+<body>
+
+<slot />
+
+</body>
 </html>
