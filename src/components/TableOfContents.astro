@@ -1,0 +1,29 @@
+---
+const { headings } = Astro.props;
+---
+
+{headings.length > 0 && (
+
+<aside>
+
+<h3>Содержание</h3>
+
+<ul>
+
+{headings
+.filter(h => h.depth <= 3)
+.map(h => (
+
+<li>
+<a href={`#${h.slug}`}>
+{h.text}
+</a>
+</li>
+
+))}
+
+</ul>
+
+</aside>
+
+)}

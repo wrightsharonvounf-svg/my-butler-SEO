@@ -1,0 +1,33 @@
+---
+import { getCollection } from 'astro:content';
+
+const { cluster, currentSlug } = Astro.props;
+
+const posts = await getCollection('posts');
+
+const related = posts
+  .filter(
+    p =>
+      p.data.cluster === cluster &&
+      p.slug !== currentSlug
+  )
+  .slice(0, 5);
+---
+
+<section>
+
+<h2>Статьи по теме</h2>
+
+<ul>
+  {related.map(post => (
+
+<li>
+<a href={`/blog/${post.slug.replace(/-\d{4}-\d{2}-\d{2}$/,'')}/`}>
+{post.data.title}
+</a>
+</li>
+
+  ))}
+</ul>
+
+</section>

@@ -1,161 +1,168 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import { getCollection } from 'astro:content';
+import ClusterPosts from '../../components/ClusterPosts.astro';
+import TableOfContents from '../../components/TableOfContents.astro';
 
 export async function getStaticPaths() {
-  const posts = await getCollection('posts');
-  const paths = [];
 
-  for (const post of posts) {
-    const originalSlug = post.slug;
-    const cleanSlug = originalSlug.replace(/-\d{4}-\d{2}-\d{2}$/, '');
+const posts = await getCollection('posts');
 
-    // Новый URL
-    paths.push({
-      params: { slug: cleanSlug },
-      props: { post, isRedirect: false, cleanSlug }
-    });
+return posts.map(post => ({
 
-    // Старый URL → redirect
-    if (originalSlug !== cleanSlug) {
-      paths.push({
-        params: { slug: originalSlug },
-        props: { post, isRedirect: true, cleanSlug }
-      });
-    }
-  }
+params: { slug: post.slug.replace(/-\d{4}-\d{2}-\d{2}$/,'') },
 
-  return paths;
+props: { post }
+
+}));
+
 }
 
-const { post, isRedirect, cleanSlug } = Astro.props;
+const { post } = Astro.props;
 
-let Content = null;
-let headings = [];
-let relatedPosts = [];
+const rendered = await post.render();
 
-if (!isRedirect) {
-  const rendered = await post.render();
-  Content = rendered.Content;
-  headings = rendered.headings;
+const Content = rendered.Content;
 
-  const allPosts = await getCollection('posts');
+const headings = rendered.headings;
 
-  relatedPosts = allPosts
-    .filter(p =>
-      p.slug !== post.slug &&
-      p.data.tags?.some(tag => post.data.tags?.includes(tag))
-    )
-    .slice(0, 4);
-}
-
-const canonical = `https://www.butler-tim.ru/blog/${cleanSlug}/`;
+const canonical = `https://www.butler-tim.ru/blog/${post.slug.replace(/-\d{4}-\d{2}-\d{2}$/,'')}/`;
 ---
 
-{isRedirect ? (
-  <html lang="ru">
-    <head>
-      <meta http-equiv="refresh" content={`0; url=${canonical}`} />
-      <link rel="canonical" href={canonical} />
-    </head>
-    <body>
-      <a href={canonical}>Перейти</a>
-    </body>
-  </html>
-) : (
-  <BaseLayout seo={{
-    title: post.data.title,
-    description: post.data.description,
-    canonical,
-    publishedTime: post.data.pubDate,
-    modifiedTime: post.data.updatedDate
-  }}>
+<BaseLayout
 
-    <Breadcrumbs title={post.data.title} />
+title={post.data.title}
 
-    <article>
+description={post.data.description}
 
-      {/* Article Schema */}
-      <script type="application/ld+json">
-      {JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "Article",
-        "headline": post.data.title,
-        "datePublished": post.data.pubDate,
-        "dateModified": post.data.updatedDate || post.data.pubDate,
-        "author": {
-          "@type": "Organization",
-          "name": "Butler Tim"
-        }
-      })}
-      </script>
+canonical={canonical}
 
-      {/* Оглавление */}
-      {headings.length > 0 && (
-        <aside>
-          <h3>Содержание</h3>
-          <ul>
-            {headings
-              .filter(h => h.depth <= 3)
-              .map(h => (
-                <li>
-                  <a href={`#${h.slug}`}>{h.text}</a>
-                </li>
-            ))}
-          </ul>
-        </aside>
-      )}
+>
 
-      <Content />
+<nav>
 
-      {/* FAQ */}
-      {post.data.faq && (
-        <>
-          <section>
-            <h2>Частые вопросы</h2>
-            {post.data.faq.map(item => (
-              <div>
-                <h3>{item.question}</h3>
-                <p>{item.answer}</p>
-              </div>
-            ))}
-          </section>
+<a href="/">Главная</a> →
 
-          <script type="application/ld+json">
-          {JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "FAQPage",
-            "mainEntity": post.data.faq.map(item => ({
-              "@type": "Question",
-              "name": item.question,
-              "acceptedAnswer": {
-                "@type": "Answer",
-                "text": item.answer
-              }
-            }))
-          })}
-          </script>
-        </>
-      )}
+<a href="/blog/">Блог</a> →
 
-      {/* Похожие статьи */}
-      {relatedPosts.length > 0 && (
-        <section>
-          <h2>Похожие статьи</h2>
-          <ul>
-            {relatedPosts.map(p => (
-              <li>
-                <a href={`/blog/${p.slug.replace(/-\d{4}-\d{2}-\d{2}$/, '')}/`}>
-                  {p.data.title}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+<a href={`/blog/clusters/${post.data.cluster}/`}>
+{post.data.cluster}
+</a> →
 
-    </article>
+<span>{post.data.title}</span>
 
-  </BaseLayout>
+</nav>
+
+<article>
+
+<script type="application/ld+json">
+
+{JSON.stringify({
+
+"@context": "https://schema.org",
+
+"@type": "Article",
+
+"headline": post.data.title,
+
+"datePublished": post.data.pubDate,
+
+"dateModified": post.data.updatedDate || post.data.pubDate,
+
+"author": {
+
+"@type": "Organization",
+
+"name": "Butler Tim"
+
+},
+
+"mainEntityOfPage": canonical
+
+})}
+
+</script>
+
+<TableOfContents headings={headings} />
+
+<Content />
+
+{post.data.faq && (
+
+<section>
+
+<h2>Частые вопросы</h2>
+
+{post.data.faq.map(item => (
+
+<div>
+
+<h3>{item.question}</h3>
+
+<p>{item.answer}</p>
+
+</div>
+
+))}
+
+</section>
+
 )}
+
+{post.data.faq && (
+
+<script type="application/ld+json">
+
+{JSON.stringify({
+
+"@context": "https://schema.org",
+
+"@type": "FAQPage",
+
+"mainEntity": post.data.faq.map(item => ({
+
+"@type": "Question",
+
+"name": item.question,
+
+"acceptedAnswer": {
+
+"@type": "Answer",
+
+"text": item.answer
+
+}
+
+}))
+
+})}
+
+</script>
+
+)}
+
+<ClusterPosts
+
+cluster={post.data.cluster}
+
+currentSlug={post.slug}
+
+/>
+
+<section>
+
+<h2>Хотите узнать доходность квартиры в СПб?</h2>
+
+<p>
+
+Оставьте заявку и получите расчёт доходности.
+
+</p>
+
+<a href="/kontakty">Получить консультацию</a>
+
+</section>
+
+</article>
+
+</BaseLayout>
