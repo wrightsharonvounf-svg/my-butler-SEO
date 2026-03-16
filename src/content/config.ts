@@ -4,13 +4,14 @@ const posts = defineCollection({
   type: 'content',
 
   schema: z.object({
+
     title: z.string(),
 
     description: z.string(),
 
-    pubDate: z.date(),
+    pubDate: z.coerce.date(),
 
-    updatedDate: z.date().optional(),
+    updatedDate: z.coerce.date().optional(),
 
     author: z.string().optional(),
 
@@ -21,7 +22,7 @@ const posts = defineCollection({
       "profit",
       "districts",
       "investments"
-    ]),
+    ]).optional(),
 
     faq: z.array(
       z.object({
@@ -29,6 +30,7 @@ const posts = defineCollection({
         answer: z.string()
       })
     ).optional()
+
   })
 });
 
