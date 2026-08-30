@@ -1,7 +1,7 @@
 ---
 title: "Как выбрать арендатора в СПб"
 description: "Как выбрать арендатора в СПб"
-pubDate: 2026-08-29
+pubDate: 2026-08-30
 cluster: profit
 ---
 
